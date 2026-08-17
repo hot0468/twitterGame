@@ -61,6 +61,8 @@ body { background: var(--bg); color: var(--text); font-size: var(--fs-sm);
 .stat-row.tone-calm .icon { color: #12a594; }
 .stat-row.tone-money .icon { color: #15883f; }
 .stat-row.tone-hot .icon { color: #e5484d; }
+/* 마이너스 통장 — 게임 오버는 아니지만 갚아야 할 빚이라 눈에 띄게 */
+.stat-row.negative b, .stat-row.negative .icon { color: #e5484d; }
 
 /* 모바일 스탯 팝오버와 그 토글 버튼 — 데스크톱은 사이드바에 스탯이 상주하므로 둘 다 숨김 */
 .stats-strip { display: none; }
@@ -147,12 +149,29 @@ body { background: var(--bg); color: var(--text); font-size: var(--fs-sm);
 .tweet.detail .text { font-size: var(--fs-md); margin: 5px 0 9px; }
 .tweet.detail .meta { padding-top: 9px; border-top: 1px solid var(--border); }
 
+/* ── 주간 정산 카드 ────────────────────────────── */
+/* 주 1회뿐인 항목이라 트윗보다 존재감을 준다. 순수입이 마이너스면 색이 뒤집힌다 */
+.settle { padding: 12px 14px; border-bottom: 1px solid var(--border);
+  border-left: 3px solid #15883f; padding-left: 11px; background: #f2faf4; }
+.settle.minus { border-left-color: #e5484d; background: #fdf3f3; }
+.settle-head { display: flex; align-items: center; gap: 7px; color: #15883f; }
+.settle.minus .settle-head { color: #e5484d; }
+.settle-head b { font-size: var(--fs-sm); }
+.settle-range { color: var(--muted); font-size: var(--fs-xs); margin-left: auto; }
+.settle-net { font-size: var(--fs-xxl); font-weight: 700; color: #15883f;
+  margin: 5px 0 8px; font-variant-numeric: tabular-nums; }
+.settle.minus .settle-net { color: #e5484d; }
+.settle-row { display: flex; justify-content: space-between; gap: 10px;
+  font-size: var(--fs-xs); color: var(--muted); padding: 2px 0; }
+.settle-row b { color: var(--text); font-variant-numeric: tabular-nums; }
+
 /* ── 알림 항목 (좋아요·리트윗) ─────────────────── */
 .notif { display: flex; gap: 10px; padding: 11px 14px; border-bottom: 1px solid var(--border); }
 .notif-icon { flex-shrink: 0; padding-left: 0.4rem; }
 .notif-icon .icon { width: 1.5rem; height: 1.5rem; }
 .notif.like .notif-icon { color: #f91880; }     /* X의 좋아요 핑크 */
 .notif.retweet .notif-icon { color: #00ba7c; }  /* X의 리트윗 초록 */
+.notif.follow .notif-icon { color: var(--accent); }
 .notif-body { min-width: 0; flex: 1; }
 .notif-avatars { display: flex; gap: 4px; margin-bottom: 6px; }
 .avatar.small { width: 1.9rem; height: 1.9rem; }

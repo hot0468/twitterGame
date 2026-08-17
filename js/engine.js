@@ -52,6 +52,10 @@
     return key === "팔로워" && v > 0 ? Math.round(v * morale(against.stats.멘탈)) : v;
   }
 
+  // 돈만 마이너스를 허용한다 — 빚을 져도 능력으로 회생할 수 있어야 하고,
+  // 그 마이너스가 대출·대부 이벤트를 부르는 트리거다. 나머지 스탯은 0이 바닥.
+  function clampStat(key, v) { return key === "돈" ? v : Math.max(0, v); }
+
   function initialState() {
     return {
       day: 1, followers: 10,
@@ -59,6 +63,8 @@
       stats: { 글빨: 5, 유머: 5, 감각: 5, 멘탈: 50, 돈: 300000, 논란성: 0 },
       // tweetSeq: 트윗 id 발급용. 답글이 어느 트윗에 달렸는지(replyTo) 가리키는 근거.
       tweetSeq: 0,
+      // lastSettleDay: 아직 정산하지 않은 주의 첫날. 날짜가 건너뛰어도 한 주를 빠뜨리지 않는 근거.
+      lastSettleDay: 1,
       feed: [], tweetLog: [], activeEvents: [], eventHistory: [], ending: null
     };
   }
@@ -81,6 +87,9 @@
     state.tweetLog.concat(state.feed).forEach(function (t) {
       if (t.kind === "me" && !t.id) t.id = "tw" + ++state.tweetSeq;
     });
+    // 정산 기준일이 없던 세이브는 "지금부터" 한 주를 센다.
+    // 기본값 1을 그대로 쓰면 옛 트윗 수십 일 치를 한 번에 정산해버린다.
+    if (saved && saved.lastSettleDay === undefined) state.lastSettleDay = state.day;
 
     function getActions() {
       var list = [];
@@ -117,7 +126,7 @@
       Object.keys(state.stats).forEach(function (k) { after.stats[k] = state.stats[k]; });
       Object.keys(effects).forEach(function (k) {
         if (k === "팔로워") after.followers = Math.max(0, after.followers + effects[k]);
-        else after.stats[k] = Math.max(0, (after.stats[k] || 0) + effects[k]);
+        else after.stats[k] = clampStat(k, (after.stats[k] || 0) + effects[k]);
       });
 
       return { id: action.id, label: action.label, effects: effects,
@@ -136,7 +145,7 @@
       for (var k in effects) {
         var delta = evalEffect(k, effects[k], state);
         if (k === "팔로워") state.followers = Math.max(0, state.followers + delta);
-        else state.stats[k] = Math.max(0, (state.stats[k] || 0) + delta);
+        else state.stats[k] = clampStat(k, (state.stats[k] || 0) + delta);
         statChanges[k] = (statChanges[k] || 0) + delta;
       }
     }
@@ -181,6 +190,25 @@
       });
       return { kind: kind, actors: actors, others: total - actors.length,
         text: text, day: state.day };
+    }
+
+    // 주간 정산: 지난 한 주에 올린 트윗의 조회수를 합쳐 정산금을 받고 프리미엄 요금을 낸다.
+    // 트윗을 안 올린 주는 조회수 0 → 정산금 0이고 요금만 나간다. 그게 프리미엄 구독의 대가다.
+    // 날짜 대신 일차로만 기록한다 — "3월 2일" 표기는 ui.js 몫이다.
+    function settle(feedItems) {
+      var eco = data.economy, from = state.lastSettleDay, to = state.day - 1;
+      var views = state.tweetLog.reduce(function (sum, t) {
+        return t.day >= from && t.day <= to ? sum + (t.views || 0) : sum;
+      }, 0);
+      var payout = Math.round(views * eco.payoutPer1000Views / 1000);
+      var net = payout - eco.premiumFee;
+      state.stats.돈 += net;
+      state.lastSettleDay = state.day;
+      var item = { kind: "settlement", author: "@XPayouts", name: "크리에이터 정산",
+        from: from, to: to, views: views, payout: payout, fee: eco.premiumFee, net: net,
+        day: to, text: "" };
+      feedItems.push(item);
+      return item;
     }
 
     function pushEventFeed(ev, stageIdx, feedItems) {
@@ -263,11 +291,23 @@
         }
       });
 
+      // ── 하루 마감 ─────────────────────────────────────────────
+      // 멘탈이 바닥나면 하루를 더 태운다. 그래도 생활비는 이틀 치가 나간다.
+      var lived = 1;
       if (state.stats.멘탈 === 0) {
         state.stats.멘탈 = 20;
         feedItems.push({ author: "@world", name: "시스템", text: "멘탈이 무너졌다… 하루를 통째로 쉬며 회복했다. (멘탈 20)", day: state.day, kind: "system" });
-        state.day += 1;
+        lived = 2;
       }
+      state.day += lived;
+
+      // 생활비는 행동과 무관한 고정 지출이라 statChanges에 넣지 않는다.
+      // (statChanges는 "이 행동이 바꾼 것"이고 미리보기와 1:1로 맞아야 한다)
+      state.stats.돈 -= data.economy.livingCost * lived;
+
+      // 정산 주기가 지났으면 정산한다. 기준일과의 차이로 재므로 날짜가 건너뛰어도 안 빠뜨린다.
+      var settlement = null;
+      if (state.day - state.lastSettleDay >= data.economy.settleEvery) settlement = settle(feedItems);
 
       var ending = null;
       if (!state.ending && state.followers >= data.endings.threshold) {
@@ -277,8 +317,8 @@
       }
 
       state.feed = feedItems.concat(state.feed);
-      state.day += 1;
-      return { feedItems: feedItems, statChanges: statChanges, triggeredEvents: triggeredEvents, ending: ending };
+      return { feedItems: feedItems, statChanges: statChanges, triggeredEvents: triggeredEvents,
+        ending: ending, settlement: settlement };
     }
     return { getState: function () { return state; }, getActions: getActions,
       previewAction: previewAction, advanceTurn: advanceTurn };

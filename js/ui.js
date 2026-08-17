@@ -22,8 +22,9 @@ var UI = (function () {
   };
 
   // 실제 트위터처럼 답글은 홈 타임라인에 안 뜬다 — 알림에서 보거나 트윗 상세로 들어가야 한다
-  var TIMELINE_KINDS = ["me", "event", "system"];
-  var NOTIF_KINDS = ["like", "retweet", "follow", "reply", "event", "system"];
+  // 정산은 주 1회뿐이고 이 게임의 심장이라 타임라인·알림 양쪽에 남긴다
+  var TIMELINE_KINDS = ["me", "event", "system", "settlement"];
+  var NOTIF_KINDS = ["like", "retweet", "follow", "reply", "event", "system", "settlement"];
 
   function avatarIcon(item) {
     if (item.author === "me") return "circle-user";
@@ -97,7 +98,36 @@ var UI = (function () {
     return div;
   }
 
+  // 주간 정산 카드. 엔진은 일차와 정수 원만 넘긴다 — 날짜 표기와 "원"은 여기서만 붙인다.
+  function settlementEl(item) {
+    var div = document.createElement("div");
+    div.className = "settle" + (item.net < 0 ? " minus" : "");
+    div.innerHTML =
+      '<div class="settle-head">' + Icons.svg("wallet") +
+      "<b></b><span class=\"settle-range\"></span></div>" +
+      '<div class="settle-net"></div><div class="settle-rows"></div>';
+    div.querySelector(".settle-head b").textContent = "크리에이터 수익 정산";
+    div.querySelector(".settle-range").textContent =
+      item.from + "~" + item.to + "일차";
+    div.querySelector(".settle-net").textContent =
+      (item.net >= 0 ? "+" : "-") + statValue("돈", Math.abs(item.net));
+    var rows = div.querySelector(".settle-rows");
+    [["주간 조회수", item.views.toLocaleString() + "회"],
+     ["조회수 정산금", "+" + statValue("돈", item.payout)],
+     ["프리미엄 결제료", "-" + statValue("돈", item.fee)]
+    ].forEach(function (r) {
+      var row = document.createElement("div");
+      row.className = "settle-row";
+      row.innerHTML = "<span></span><b></b>";
+      row.querySelector("span").textContent = r[0];
+      row.querySelector("b").textContent = r[1];
+      rows.appendChild(row);
+    });
+    return div;
+  }
+
   function feedItemEl(item) {
+    if (item.kind === "settlement") return settlementEl(item);
     return REACTIONS[item.kind] ? reactionEl(item) : tweetEl(item);
   }
 
@@ -207,7 +237,9 @@ var UI = (function () {
       Object.keys(state.stats).forEach(function (k) {
         var style = STAT_STYLE[k] || { icon: "trending-up", tone: "ink" };
         var row = document.createElement("div");
-        row.className = "stat-row tone-" + style.tone;
+        // 마이너스 통장은 눈에 띄어야 한다 — 게임 오버는 아니지만 갚아야 할 빚이다
+        row.className = "stat-row tone-" + style.tone +
+          (state.stats[k] < 0 ? " negative" : "");
         row.innerHTML = '<span class="stat-name">' + Icons.svg(style.icon) +
           "<span></span></span><b></b>";
         row.querySelector(".stat-name span").textContent = k;

@@ -1,9 +1,14 @@
 var GAME_DATA = GAME_DATA || {};
+// 목표는 100만 팔로워. 도달하는 순간 아래 목록에서 조건이 맞는 첫 항목이 엔딩이 된다
+// (list 순서 = 우선순위, 마지막 항목은 조건이 없어야 무조건 하나는 나온다).
 GAME_DATA.endings = {
-  threshold: 10000,
+  threshold: 1000000,
   list: [
     { id: "cyber_wrecker", title: "사이버렉카", condition: { "논란성": ">=50" },
       text: "당신은 논란을 연료로 달리는 계정이 되었다. 팔로워는 많지만, 절반은 안티다." },
+    // 빚은 게임 오버가 아니다 — 마이너스 통장으로도 100만은 찍을 수 있고, 그건 그것대로 엔딩이다
+    { id: "debt_star", title: "빚쟁이 스타", condition: { "돈": "<0" },
+      text: "팔로워 100만. 그리고 마이너스 통장. 다음 주 정산금은 이미 빚쟁이가 예약해뒀다." },
     { id: "author", title: "등단 작가", condition: { topStat: "글빨" },
       text: "출판사에서 DM이 왔다. 트위터 글쟁이에서 진짜 작가로." },
     { id: "comedian", title: "밈 장인", condition: { topStat: "유머" },

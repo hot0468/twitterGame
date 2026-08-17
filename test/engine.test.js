@@ -39,6 +39,7 @@ console.log("Task 1 OK");
 // --- Task 2: create / getActions ---
 function loadData() {
   var d = {};
+  Object.assign(d, require("../data/economy.js"));
   Object.assign(d, require("../data/actions.js"));
   Object.assign(d, require("../data/npcs.js"));
   Object.assign(d, require("../data/events.js"));
@@ -245,16 +246,17 @@ var tired = { followers: 100, stats: { 멘탈: 10, 글빨: 5 } };
 assert.strictEqual(U.evalEffect("팔로워", -200, tired), -200, "팔로워 감소는 컨디션과 무관");
 assert.strictEqual(U.evalEffect("돈", 80000, tired), 80000, "팔로워 외 스탯은 컨디션과 무관");
 
-// 돈: 벌고 / 쓰고 / 부족하면 잠긴다
+// 돈: 벌고 / 쓰고 / 부족하면 잠긴다. 하루가 지나면 생활비가 무조건 나간다.
+var LIVING = loadData().economy.livingCost;
 var gm = Engine.create(loadData(), null, fixedRng);
 assert.strictEqual(gm.getState().stats.돈, 300000, "시작 돈 300,000원");
 gm.advanceTurn("parttime", false);
-assert.strictEqual(gm.getState().stats.돈, 380000, "알바 +80,000원");
+assert.strictEqual(gm.getState().stats.돈, 380000 - LIVING, "알바 +80,000원, 생활비 -10,000원");
 assert.strictEqual(gm.getState().stats.멘탈, 46, "알바는 멘탈 -4");
 
 var gm2 = Engine.create(loadData(), null, fixedRng);
 gm2.advanceTurn("promo", false);
-assert.strictEqual(gm2.getState().stats.돈, 50000, "홍보 -250,000원");
+assert.strictEqual(gm2.getState().stats.돈, 50000 - LIVING, "홍보 -250,000원");
 assert.strictEqual(gm2.getState().followers, 260, "홍보로 팔로워 +250");
 assert.ok(gm2.getActions().map(function (a) { return a.id; }).indexOf("promo") === -1,
   "돈 250,000원 미만이면 홍보가 잠긴다");
@@ -265,12 +267,96 @@ assert.ok(gm3.getActions().map(function (a) { return a.id; }).indexOf("sponsor")
 gm3.getState().followers = 1000;
 assert.ok(gm3.getActions().map(function (a) { return a.id; }).indexOf("sponsor") !== -1, "팔로워 충족 시 해금");
 gm3.advanceTurn("sponsor", false);
-assert.strictEqual(gm3.getState().stats.돈, 300000, "협찬은 트윗을 올려야 돈이 들어온다");
+assert.strictEqual(gm3.getState().stats.돈, 300000 - LIVING, "협찬은 트윗을 올려야 돈이 들어온다");
 var gm4 = Engine.create(loadData(), null, fixedRng);
 gm4.getState().followers = 1000;
 gm4.advanceTurn("sponsor", true);
-assert.strictEqual(gm4.getState().stats.돈, 300000 + 120000 + 40000, "협찬 트윗: 120000 + 팔로워*40");
+assert.strictEqual(gm4.getState().stats.돈, 300000 + 150000 + 2000 - LIVING, "협찬 트윗: 150000 + 팔로워*2");
 assert.strictEqual(gm4.getState().stats.논란성, 4, "협찬은 논란성 +4가 대가");
+
+// ── 프리미엄 경제: 생활비 / 주간 정산 / 마이너스 통장 ──
+// 생활비는 행동과 무관한 고정 지출이라 statChanges에 안 들어간다(미리보기와 1:1로 맞아야 하므로)
+var gLiv = Engine.create(loadData(), null, function () { return 0.99; });
+var rLiv = gLiv.advanceTurn("rest", false);
+assert.strictEqual(rLiv.statChanges.돈, undefined, "생활비는 행동 효과가 아니다");
+assert.strictEqual(gLiv.getState().stats.돈, 300000 - LIVING, "그래도 돈에서는 빠져나간다");
+
+// 멘탈 붕괴로 이틀이 지나면 생활비도 이틀 치
+var gLiv2 = Engine.create(loadData(), null, function () { return 0.99; });
+gLiv2.getState().stats.멘탈 = 5;
+gLiv2.getState().stats.감각 = 10;
+gLiv2.advanceTurn("beef_watch", true); // 멘탈 -5 → 0 → 붕괴로 하루 더
+assert.strictEqual(gLiv2.getState().day, 3, "붕괴로 이틀이 지난다");
+assert.ok(gLiv2.getState().stats.돈 <= 300000 - LIVING * 2, "이틀 살았으면 생활비도 이틀 치");
+
+// 7일이 지나면 정산: 그 주에 올린 트윗의 조회수 합 × 단가 - 프리미엄 요금
+var eco = loadData().economy;
+var gSet = Engine.create(loadData(), null, function () { return 0.99; });
+gSet.getState().followers = 50000;
+var settleResult = null, weekViews = 0;
+for (var d = 0; d < eco.settleEvery; d++) {
+  var rs = gSet.advanceTurn("write", true);
+  weekViews += rs.feedItems.filter(function (f) { return f.kind === "me"; })[0].views;
+  if (rs.settlement) settleResult = rs.settlement;
+}
+assert.ok(settleResult, eco.settleEvery + "일차에 정산이 나온다");
+assert.strictEqual(gSet.getState().day, eco.settleEvery + 1);
+assert.strictEqual(settleResult.views, weekViews, "정산 조회수 = 그 주 트윗 조회수 합");
+assert.strictEqual(settleResult.payout,
+  Math.round(weekViews * eco.payoutPer1000Views / 1000), "정산금 = 조회수/1000 × 단가");
+assert.strictEqual(settleResult.net, settleResult.payout - eco.premiumFee,
+  "순수입 = 정산금 - 프리미엄 결제료");
+assert.deepStrictEqual([settleResult.from, settleResult.to], [1, eco.settleEvery],
+  "정산 구간은 1~7일차");
+assert.ok(gSet.getState().feed.some(function (f) { return f.kind === "settlement"; }),
+  "정산은 피드에 남는다");
+// 정산은 주 1회뿐 — 다음 턴에 또 나오면 안 된다
+assert.strictEqual(gSet.advanceTurn("write", true).settlement, null, "정산은 주 1회");
+
+// 트윗을 한 번도 안 올린 주는 조회수 0 → 요금만 빠진다
+var gIdle = Engine.create(loadData(), null, function () { return 0.99; });
+var idleSettle = null;
+for (var i = 0; i < eco.settleEvery; i++) {
+  idleSettle = gIdle.advanceTurn("rest", false).settlement || idleSettle;
+}
+assert.strictEqual(idleSettle.views, 0, "안 올렸으면 조회수 0");
+assert.strictEqual(idleSettle.net, -eco.premiumFee, "정산금 0이어도 프리미엄 요금은 나간다");
+
+// 돈은 마이너스로 내려간다 (파산 = 게임 오버가 아니라 회생 대상)
+var gDebt = Engine.create(loadData(), null, function () { return 0.99; });
+gDebt.getState().stats.돈 = 5000;
+gDebt.advanceTurn("rest", false);
+assert.strictEqual(gDebt.getState().stats.돈, -5000, "생활비를 못 내면 마이너스로 간다");
+assert.strictEqual(gDebt.getState().ending, null, "빚을 져도 게임이 끝나지 않는다");
+gDebt.advanceTurn("rest", false);
+assert.ok(gDebt.getState().stats.돈 < -5000, "계속 살면 빚이 더 깊어진다");
+// 돈만 예외다 — 다른 스탯은 여전히 0이 바닥
+var gFloor = Engine.create(loadData(), null, function () { return 0.99; });
+gFloor.getState().stats.논란성 = 2;
+gFloor.getState().stats.감각 = 10;
+gFloor.advanceTurn("beef_watch", false); // 논란성을 깎는 경로는 이벤트뿐이라 값만 확인
+assert.ok(gFloor.getState().stats.논란성 >= 0, "논란성은 0 미만으로 안 내려간다");
+assert.ok(gFloor.getState().stats.돈 < 300000, "같은 턴에 돈은 생활비만큼 줄었다");
+
+// 마이너스 통장이 대출 이벤트를 부른다 (그 자체가 컨텐츠)
+var gLoan = Engine.create(loadData(), null, fixedRng); // rand()=0 → chance 무시
+gLoan.getState().stats.돈 = -100;
+var rLoan = gLoan.advanceTurn("rest", false);
+assert.ok(rLoan.triggeredEvents.indexOf("loan_offer") !== -1,
+  "돈이 마이너스면 대부업체 DM이 온다: " + rLoan.triggeredEvents.join(","));
+var loanChoices = gLoan.getActions().filter(function (a) { return a.kind === "event"; });
+assert.strictEqual(loanChoices.length, 3, "대출 선택지 3개");
+var moneyBefore = gLoan.getState().stats.돈, moraleBefore = gLoan.getState().stats.멘탈;
+gLoan.advanceTurn("event:loan_offer:0", false); // 급전 대출
+assert.strictEqual(gLoan.getState().stats.돈, moneyBefore + 800000 - LIVING, "대출금이 들어온다");
+assert.strictEqual(gLoan.getState().stats.멘탈, moraleBefore - 12, "이자 압박으로 멘탈 -12");
+
+// 빚이 깊어지면 독촉 이벤트
+var gDeep = Engine.create(loadData(), null, fixedRng);
+gDeep.getState().stats.돈 = -600000;
+gDeep.getState().eventHistory.push("loan_offer"); // 1단계는 이미 지났다고 보고
+assert.ok(gDeep.advanceTurn("rest", false).triggeredEvents.indexOf("debt_deep") !== -1,
+  "50만원 넘게 빚지면 독촉이 온다");
 
 // 돈은 스킬 스탯이 아니다 — topStat(엔딩 판정)에 끼면 안 된다
 assert.strictEqual(U.checkCond({ topStat: "글빨" }, S({ stats: { 글빨: 20, 돈: 999 } })), true,
@@ -322,23 +408,35 @@ assert.deepStrictEqual(r5.triggeredEvents, [], "chance 넘음 → 발동 안 함
 console.log("Task 4 OK");
 
 // --- Task 5: endings + mental ---
+// 목표는 100만 팔로워
+var GOAL = loadData().endings.threshold;
+assert.strictEqual(GOAL, 1000000, "엔딩 임계값 = 100만 팔로워");
+
 var g10 = Engine.create(loadData(), null, function () { return 0.99; }); // 이벤트 미발동
-g10.getState().followers = 9999;
+g10.getState().followers = GOAL - 1;
 g10.getState().stats.글빨 = 30;
-var r6 = g10.advanceTurn("archive", true); // 글빨 30→31, 트윗 시 글빨*4 = 124 증가 → 임계값 돌파
+var r6 = g10.advanceTurn("archive", true); // 트윗 시 글빨*4 + 팔로워*4% → 임계값 돌파
 assert.ok(r6.ending, "임계값 도달 시 엔딩");
 assert.strictEqual(r6.ending.id, "author", "글빨 최고 → 등단 작가");
 assert.strictEqual(g10.getState().ending, "author");
 
 var g11 = Engine.create(loadData(), null, function () { return 0.99; });
-g11.getState().followers = 99999;
+g11.getState().followers = GOAL;
 g11.getState().stats.논란성 = 50;
 g11.getState().stats.유머 = 40;
 var r7 = g11.advanceTurn("meme", false);
 assert.strictEqual(r7.ending.id, "cyber_wrecker", "논란성 조건이 topStat보다 우선(list 순서)");
 
+// 빚을 진 채로 100만을 찍으면 빚쟁이 엔딩 (파산은 게임 오버가 아니다)
+var g11b = Engine.create(loadData(), null, function () { return 0.99; });
+g11b.getState().followers = GOAL;
+g11b.getState().stats.돈 = -1000000;
+g11b.getState().stats.유머 = 40;
+assert.strictEqual(g11b.advanceTurn("meme", false).ending.id, "debt_star",
+  "마이너스 통장으로 목표 달성 → 빚쟁이 스타");
+
 var g12 = Engine.create(loadData(), null, function () { return 0.99; });
-g12.getState().followers = 99999;
+g12.getState().followers = GOAL;
 var r8 = g12.advanceTurn("rest", false);
 assert.ok(r8.ending, "조건 미달이어도 기본 엔딩은 반드시 나옴");
 

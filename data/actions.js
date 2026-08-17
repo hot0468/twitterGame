@@ -7,57 +7,69 @@ GAME_DATA.fills = {
 // 행동 하나 = 하루. effects는 행동만 해도 무조건 적용되고,
 // tweet.effects는 "이걸 트윗할까?"에서 트윗을 택했을 때만 적용된다.
 // 그래서 리스크(논란성·멘탈 소모)는 전부 tweet 쪽에 둔다 — 트윗하지 않으면 안전하지만 팔로워도 안 는다.
+//
+// 팔로워 수식에 붙은 `팔로워*n`이 복리 성장분이다 — 목표가 100만이라 스탯 선형 증가만으로는
+// 500턴이 걸린다. 실제 계정처럼 이미 있는 팔로워가 다음 팔로워를 데려오게 해야 곡선이 선다.
+// 초반엔 팔로워가 작아서 이 항이 거의 0이고(체감 없음), 1만을 넘긴 뒤부터 가속한다.
+// 비율은 행동의 세기 순서를 그대로 따른다: 떡밥 6% > 자료정리 4% > 밈·트렌드 3% > 나머지 1~1.5%.
 GAME_DATA.actions = [
   { id: "daily", label: "그냥 하루 보내기",
     effects: {},
-    tweet: { category: "daily", effects: { "팔로워": "1 + 글빨" },
+    tweet: { category: "daily", effects: { "팔로워": "1 + 글빨 + 팔로워*0.01" },
       templates: ["오늘 하루도 무사히 끝. {밈소재} 때문에 웃었다", "별일 없이 산다. 그게 제일 어렵다"] } },
 
   { id: "write", label: "글쓰기 연습",
     effects: { "글빨": 2 },
-    tweet: { category: "daily", effects: { "팔로워": "글빨*2" },
+    tweet: { category: "daily", effects: { "팔로워": "글빨*2 + 팔로워*0.015" },
       templates: ["오늘은 하루종일 필사했다. 손목 아파", "문장 100개 고쳐 썼다. 아직 마음에 안 든다"] } },
 
   { id: "meme", label: "밈 공부",
     effects: { "유머": 2 },
-    tweet: { category: "humor", effects: { "팔로워": "유머*3 + 글빨" },
+    tweet: { category: "humor", effects: { "팔로워": "유머*3 + 글빨 + 팔로워*0.03" },
       templates: ["{밈소재} 실화냐 ㅋㅋㅋㅋ", "방금 {밈소재} 봤는데 아직도 웃고 있음"] } },
 
   { id: "trend", label: "트렌드 조사",
     effects: { "감각": 2 },
-    tweet: { category: "info", effects: { "팔로워": "감각*3" },
+    tweet: { category: "info", effects: { "팔로워": "감각*3 + 팔로워*0.03" },
       templates: ["실트 3시간 관찰 일지: 요즘 먹히는 소재 정리", "지금 타임라인 분위기 요약해봄"] } },
 
   { id: "archive", label: "자료 정리", requires: { "글빨": 10 },
     effects: { "글빨": 1 },
-    tweet: { category: "info", effects: { "팔로워": "글빨*4" },
+    tweet: { category: "info", effects: { "팔로워": "글빨*4 + 팔로워*0.04" },
       templates: ["[정보] 알아두면 쓸모있는 꿀팁 정리 (1/n)", "이거 모르는 사람 많던데, 정리해드림"] } },
 
   { id: "beef_watch", label: "떡밥 지켜보기", requires: { "감각": 10 },
     effects: { "감각": 1 },
-    tweet: { category: "bait", effects: { "팔로워": "감각*5 + 유머*2", "논란성": 5, "멘탈": -5 },
+    tweet: { category: "bait", effects: { "팔로워": "감각*5 + 유머*2 + 팔로워*0.06", "논란성": 5, "멘탈": -5 },
       templates: ["{떡밥}, 제 생각은 좀 다릅니다만", "{떡밥} 이거 다들 잘못 알고 있음"] } },
 
+  // 휴식만 복리분이 없다 — 폰 끄고 쉰 날은 계정이 자라지 않는다
   { id: "rest", label: "휴식",
     effects: { "멘탈": 15 },
     tweet: { category: "daily", effects: { "팔로워": 1 },
       templates: ["오늘은 폰 끄고 쉼. 내일 봐요", "잠을 12시간 잤다. 인간이 됐다"] } },
 
   // ── 돈 관련 (돈은 원 단위) ──
-  // 알바로 벌고, 협찬으로 크게 벌고(논란성이 대가), 홍보로 팔로워를 직접 산다.
+  // 주 수입은 주간 조회수 정산금(data/economy.js)이고, 아래는 정산금이 생활비를 못 덮는
+  // 초·중반을 버티는 수단이다. 알바로 벌고, 협찬으로 크게 벌고(논란성이 대가),
+  // 홍보로 팔로워를 직접 산다.
   { id: "parttime", label: "알바하기",
     effects: { "돈": 80000, "멘탈": -4 },
-    tweet: { category: "daily", effects: { "팔로워": "1 + 글빨" },
+    tweet: { category: "daily", effects: { "팔로워": "1 + 글빨 + 팔로워*0.01" },
       templates: ["알바 끝. 다리가 내 다리가 아니다", "오늘 시급으로 산 커피가 제일 맛있었다"] } },
 
+  // 협찬은 팔로워에 붙지만 기울기가 완만하다(팔로워*2). 옛 수식(팔로워*40)이면
+  // 100만에서 한 방에 4천만원이 들어와 정산금이 무의미해진다 — 정산이 주 수입이어야 한다.
   { id: "sponsor", label: "협찬 검토", requires: { "팔로워": 500 },
     effects: {},
-    tweet: { category: "info", effects: { "돈": "120000 + 팔로워*40", "논란성": 4 },
+    tweet: { category: "info", effects: { "돈": "150000 + 팔로워*2", "논란성": 4 },
       templates: ["[광고] 이거 진짜 좋아서 소개합니다 (내돈내산 아님)", "협찬 받았습니다. 그래도 솔직하게 써봄"] } },
 
+  // 홍보는 정액이라 계정이 커지면 스스로 퇴장한다(100만 계정에 25만원 광고는 티도 안 난다).
+  // 그게 의도다 — 초반 부스터일 뿐 후반 치트키가 되면 안 된다.
   { id: "promo", label: "홍보 돌리기", requires: { "돈": 250000 },
     effects: { "돈": -250000, "팔로워": 250 },
-    tweet: { category: "daily", effects: { "팔로워": "글빨*2" },
+    tweet: { category: "daily", effects: { "팔로워": "글빨*2 + 팔로워*0.01" },
       templates: ["계정 홍보 좀 해봤습니다. 새로 오신 분들 반가워요", "유입 감사합니다. 앞으로 잘 부탁드립니다"] } }
 ];
 if (typeof module !== "undefined") module.exports = GAME_DATA;
