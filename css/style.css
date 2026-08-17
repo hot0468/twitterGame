@@ -59,6 +59,7 @@ body { background: var(--bg); color: var(--text); font-size: var(--fs-sm);
 .stat-row.tone-warm .icon { color: #e8a020; }
 .stat-row.tone-violet .icon { color: #8b5cf6; }
 .stat-row.tone-calm .icon { color: #12a594; }
+.stat-row.tone-money .icon { color: #15883f; }
 .stat-row.tone-hot .icon { color: #e5484d; }
 
 /* 모바일 스탯 팝오버와 그 토글 버튼 — 데스크톱은 사이드바에 스탯이 상주하므로 둘 다 숨김 */

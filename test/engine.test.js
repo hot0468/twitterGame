@@ -63,6 +63,16 @@ var saved = JSON.parse(JSON.stringify(g.getState()));
 var g3 = Engine.create(loadData(), saved);
 assert.strictEqual(g3.getState().followers, 10, "저장 상태 복원");
 
+// 구버전 세이브 호환: 나중에 추가된 스탯(돈)이 없어도 기본값으로 채워져야 한다.
+// 안 채우면 돈을 쓰는 수식이 evalFormula에서 ReferenceError로 터진다.
+var legacy = JSON.parse(JSON.stringify(g.getState()));
+delete legacy.stats.돈;
+var g3b = Engine.create(loadData(), legacy);
+assert.strictEqual(g3b.getState().stats.돈, 30, "빠진 스탯이 기본값으로 채워짐");
+assert.strictEqual(g3b.getState().stats.글빨, 5, "기존 값은 덮어쓰지 않음");
+g3b.getState().stats.돈 = 25;
+assert.doesNotThrow(function () { g3b.advanceTurn("promo", false); }, "돈 수식이 터지지 않음");
+
 console.log("Task 2 OK");
 
 // --- Task 3: advanceTurn(actionId, doTweet) ---
@@ -127,6 +137,37 @@ assert.strictEqual(g5d.previewAction("없는행동"), null);
   Object.keys(p.tweetEffects).forEach(function (k) { expected[k] = (expected[k] || 0) + p.tweetEffects[k]; });
   assert.deepStrictEqual(applied, expected, id + ": 미리보기와 실제 적용값이 달라짐");
 });
+
+// 돈: 벌고 / 쓰고 / 부족하면 잠긴다
+var gm = Engine.create(loadData(), null, fixedRng);
+assert.strictEqual(gm.getState().stats.돈, 30, "시작 돈 30");
+gm.advanceTurn("parttime", false);
+assert.strictEqual(gm.getState().stats.돈, 38, "알바 +8");
+assert.strictEqual(gm.getState().stats.멘탈, 46, "알바는 멘탈 -4");
+
+var gm2 = Engine.create(loadData(), null, fixedRng);
+gm2.advanceTurn("promo", false);
+assert.strictEqual(gm2.getState().stats.돈, 5, "홍보 -25");
+assert.strictEqual(gm2.getState().followers, 260, "홍보로 팔로워 +250");
+assert.ok(gm2.getActions().map(function (a) { return a.id; }).indexOf("promo") === -1,
+  "돈 25 미만이면 홍보가 잠긴다");
+
+var gm3 = Engine.create(loadData(), null, fixedRng);
+assert.ok(gm3.getActions().map(function (a) { return a.id; }).indexOf("sponsor") === -1,
+  "팔로워 500 미만이면 협찬이 잠긴다");
+gm3.getState().followers = 1000;
+assert.ok(gm3.getActions().map(function (a) { return a.id; }).indexOf("sponsor") !== -1, "팔로워 충족 시 해금");
+gm3.advanceTurn("sponsor", false);
+assert.strictEqual(gm3.getState().stats.돈, 30, "협찬은 트윗을 올려야 돈이 들어온다");
+var gm4 = Engine.create(loadData(), null, fixedRng);
+gm4.getState().followers = 1000;
+gm4.advanceTurn("sponsor", true);
+assert.strictEqual(gm4.getState().stats.돈, 30 + 12 + 4, "협찬 트윗: 12 + 팔로워/250");
+assert.strictEqual(gm4.getState().stats.논란성, 4, "협찬은 논란성 +4가 대가");
+
+// 돈은 스킬 스탯이 아니다 — topStat(엔딩 판정)에 끼면 안 된다
+assert.strictEqual(U.checkCond({ topStat: "글빨" }, S({ stats: { 글빨: 20, 돈: 999 } })), true,
+  "돈은 topStat 비교에서 제외");
 
 var g6 = Engine.create(loadData(), null, fixedRng);
 g6.getState().stats.멘탈 = 3;

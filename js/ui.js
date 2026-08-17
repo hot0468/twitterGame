@@ -17,6 +17,7 @@ var UI = (function () {
     "유머": { icon: "laugh", tone: "warm" },
     "감각": { icon: "trending-up", tone: "violet" },
     "멘탈": { icon: "battery-medium", tone: "calm" },
+    "돈": { icon: "wallet", tone: "money" },
     "논란성": { icon: "flame", tone: "hot" }
   };
 

@@ -39,6 +39,16 @@ var strategies = {
     // 떡밥은 트윗해야 팔로워가 붙는다 (그리고 논란성·멘탈을 대가로 낸다)
     var beef = acts.filter(function (a) { return a.id === "beef_watch"; })[0];
     return beef ? { id: "beef_watch", tweet: true } : { id: "trend", tweet: false };
+  },
+  // 돈으로 팔로워를 사는 경로가 성립하는지 확인한다 (알바/협찬으로 벌고 → 홍보로 환전)
+  "돈벌이": function (acts, rand, state) {
+    var has = function (id) { return acts.some(function (a) { return a.id === id; }); };
+    var ev = acts.filter(function (a) { return a.kind === "event"; })[0];
+    if (ev) return { id: ev.id, tweet: false };
+    if (state.stats.멘탈 < 20) return { id: "rest", tweet: false };
+    if (has("promo")) return { id: "promo", tweet: true };
+    if (has("sponsor")) return { id: "sponsor", tweet: true };
+    return { id: "parttime", tweet: true };
   }
 };
 

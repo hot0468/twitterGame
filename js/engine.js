@@ -42,7 +42,7 @@
   function initialState() {
     return {
       day: 1, followers: 10,
-      stats: { 글빨: 5, 유머: 5, 감각: 5, 멘탈: 50, 논란성: 0 },
+      stats: { 글빨: 5, 유머: 5, 감각: 5, 멘탈: 50, 돈: 30, 논란성: 0 },
       feed: [], tweetLog: [], activeEvents: [], eventHistory: [], ending: null
     };
   }
@@ -50,6 +50,13 @@
   function create(data, saved, rng) {
     var rand = rng || Math.random;
     var state = saved || initialState();
+
+    // 구버전 세이브 호환: 나중에 추가된 스탯을 기본값으로 채운다.
+    // 안 채우면 그 스탯을 쓰는 수식이 evalFormula에서 ReferenceError로 터진다.
+    var defaults = initialState().stats;
+    Object.keys(defaults).forEach(function (k) {
+      if (typeof state.stats[k] !== "number") state.stats[k] = defaults[k];
+    });
 
     function getActions() {
       var list = [];
