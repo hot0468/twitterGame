@@ -45,13 +45,6 @@ body { background: var(--bg); color: var(--text); font-size: var(--fs-sm);
 .badge { background: var(--accent); color: #fff; border-radius: 10px;
   padding: 1px 6px; font-size: var(--fs-xs); font-weight: 700; }
 
-.next-day { display: flex; align-items: center; justify-content: center; gap: 7px;
-  margin-top: 14px; background: var(--accent); border: none; color: #fff;
-  font-family: inherit; font-size: var(--fs-base); font-weight: 700;
-  padding: 11px; border-radius: 24px; cursor: pointer; }
-.next-day:hover:not(:disabled) { background: var(--accent-dark); }
-.next-day:disabled { opacity: 0.4; cursor: default; }
-
 /* 스탯 패널 — 사이드바 하단, 새 게임 버튼 바로 위 */
 .stats-panel { margin-top: auto; padding: 10px 2px 8px; border-top: 1px solid var(--border);
   display: flex; flex-direction: column; gap: 1px; }
@@ -91,7 +84,7 @@ body { background: var(--bg); color: var(--text); font-size: var(--fs-sm);
   color: var(--muted); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .avatar .icon { width: 1.7rem; height: 1.7rem; }
 
-.action-list { border-bottom: 1px solid var(--border); }
+.action-list { max-height: 52vh; overflow-y: auto; }
 .action-item { padding: 10px 14px; cursor: pointer; display: flex;
   justify-content: space-between; align-items: center; gap: 12px; }
 .action-item:hover { background: var(--hover); }
@@ -142,19 +135,47 @@ body { background: var(--bg); color: var(--text); font-size: var(--fs-sm);
 
 .empty { padding: 34px 20px; text-align: center; color: var(--muted); font-size: var(--fs-sm); }
 
-/* ── 엔딩 오버레이 ───────────────────────────── */
+/* ── 딤팝업 (행동 선택 · 트윗 여부 · 날짜 전환 · 엔딩 공용) ── */
 .overlay { position: fixed; inset: 0; background: rgba(15, 20, 25, 0.5); z-index: 100;
   display: flex; align-items: center; justify-content: center; text-align: center; padding: 20px; }
-.overlay .card { background: var(--bg); border-radius: 18px; padding: 32px;
-  max-width: 24rem; box-shadow: 0 12px 40px rgba(15, 20, 25, 0.25); }
+.overlay .card { width: 100%; max-width: 25rem; background: var(--bg); border-radius: 18px;
+  padding: 26px; box-shadow: 0 12px 40px rgba(15, 20, 25, 0.25); }
 .overlay .trophy { display: flex; justify-content: center; color: #d4a017; margin-bottom: 12px; }
 .overlay .trophy .icon { width: 3rem; height: 3rem; }
 .overlay h1 { font-size: var(--fs-xxl); margin-bottom: 10px; }
 .overlay p { color: var(--muted); line-height: 1.6; margin-bottom: 22px; }
-.overlay button { background: var(--accent); border: none; color: #fff; font-family: inherit;
-  font-weight: 700; padding: 11px 30px; border-radius: 24px; cursor: pointer;
-  font-size: var(--fs-base); }
-.overlay button:hover { background: var(--accent-dark); }
+
+.btn-primary, .btn-ghost { font-family: inherit; font-size: var(--fs-base); font-weight: 700;
+  padding: 11px 26px; border-radius: 24px; cursor: pointer; }
+.btn-primary { background: var(--accent); border: none; color: #fff; }
+.btn-primary:hover { background: var(--accent-dark); }
+.btn-ghost { background: none; border: 1px solid #cfd9de; color: var(--muted); }
+.btn-ghost:hover { background: var(--hover); }
+.icon-btn { display: flex; background: none; border: none; color: var(--muted);
+  padding: 5px; border-radius: 50%; cursor: pointer; }
+.icon-btn:hover { background: var(--hover); color: var(--text); }
+
+/* 행동 선택 팝업 */
+.compose-card { padding: 8px 0 6px; text-align: left; }
+.modal-head { display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 12px 10px 16px; border-bottom: 1px solid var(--border); }
+.modal-head h3 { font-size: var(--fs-md); }
+
+/* 트윗 여부 팝업 */
+.tweet-card h3 { font-size: var(--fs-md); margin-bottom: 16px; }
+.preview { text-align: left; background: var(--hover); border: 1px solid var(--border);
+  border-radius: 12px; padding: 10px 12px; margin-bottom: 20px; }
+.preview-row { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; }
+.preview-label { color: var(--muted); font-size: var(--fs-xs); }
+.preview-row b { font-variant-numeric: tabular-nums; }
+.preview-row .post { color: var(--accent); }
+.modal-actions { display: flex; gap: 8px; justify-content: center; }
+
+/* 날짜 전환 팝업 — 카드 없이 큰 글씨만 */
+.day-overlay { background: rgba(255, 255, 255, 0.92); cursor: pointer; }
+.day-card { text-align: center; }
+.day-num { font-size: var(--fs-xxl); font-weight: 700; }
+.day-date { color: var(--muted); font-size: var(--fs-md); margin-top: 4px; }
 
 /* ── 모바일 (실제 X 앱 구조: 하단 탭바 + 컴포즈 FAB + 전체폭 타임라인) ── */
 @media (max-width: 640px) {
@@ -170,17 +191,17 @@ body { background: var(--bg); color: var(--text); font-size: var(--fs-sm);
   .logo { display: none; }
   .nav-btn, .new-game { flex: 1; justify-content: center; border-radius: 12px; }
   .nav-btn { padding: 11px 0; }
-  .nav-btn .label, .next-day .label, .new-game .label { display: none; }
+  .nav-btn .label, .new-game .label { display: none; }
   .nav-btn.active { color: var(--accent); }
   /* 라벨이 없으니 뱃지를 아이콘 위로 올린다 */
   .badge { position: absolute; top: 3px; left: 50%; margin-left: 1px; }
   .new-game { margin-top: 0; padding: 11px 0; border: none; }
 
-  /* 다음 날 → X의 파란 작성 버튼 자리(우하단 FAB) */
-  .next-day { position: fixed; right: 14px; bottom: 5.4rem; z-index: 21;
-    width: 4.2rem; height: 4.2rem; margin-top: 0; padding: 0; border-radius: 50%;
-    box-shadow: 0 4px 14px rgba(29, 155, 240, 0.45); }
-  .next-day .icon { width: 2rem; height: 2rem; }
+  /* 팝업은 화면 폭을 거의 다 쓴다 (데스크톱의 max-width 상한을 푼다) */
+  .overlay { padding: 14px; align-items: flex-end; }
+  .overlay .card { max-width: none; }
+  .day-overlay { align-items: center; }
+  .action-list { max-height: 60vh; }
 
   /* 스탯 → 독바의 스탯 버튼을 누르면 뜨는 팝오버 (독바 위에 카드로) */
   .stats-panel { display: none; }

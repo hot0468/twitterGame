@@ -19,22 +19,26 @@ function mulberry32(seed) { // 시드 고정 RNG — 재현 가능한 시뮬레�
   };
 }
 
+// 전략은 { id, tweet }을 고른다 — 행동을 뭘 할지 + 그걸 트윗할지
 var strategies = {
-  "랜덤": function (acts, rand) { return acts[Math.floor(rand() * acts.length)]; },
+  "랜덤": function (acts, rand) {
+    return { id: acts[Math.floor(rand() * acts.length)].id, tweet: rand() < 0.5 };
+  },
   "성장몰빵": function (acts, rand, state) {
     var ev = acts.filter(function (a) { return a.kind === "event"; })[0];
-    if (ev) return ev;
-    if (state.stats.멘탈 < 20) return acts.filter(function (a) { return a.id === "rest"; })[0];
-    if (state.day % 3 === 0) return acts.filter(function (a) { return a.id === "train_writing"; })[0];
-    var info = acts.filter(function (a) { return a.id === "tweet_info"; })[0];
-    return info || acts.filter(function (a) { return a.id === "tweet_daily"; })[0];
+    if (ev) return { id: ev.id, tweet: false };
+    if (state.stats.멘탈 < 20) return { id: "rest", tweet: false };
+    // 글빨을 먼저 쌓고, 자료 정리가 열리면 트윗으로 환전한다
+    var archive = acts.filter(function (a) { return a.id === "archive"; })[0];
+    return archive ? { id: "archive", tweet: true } : { id: "write", tweet: false };
   },
   "어그로": function (acts, rand, state) {
     var ev = acts.filter(function (a) { return a.kind === "event"; })[0];
-    if (ev) return ev;
-    if (state.stats.멘탈 < 25) return acts.filter(function (a) { return a.id === "rest"; })[0];
-    var bait = acts.filter(function (a) { return a.id === "tweet_bait"; })[0];
-    return bait || acts.filter(function (a) { return a.id === "train_trend"; })[0];
+    if (ev) return { id: ev.id, tweet: false };
+    if (state.stats.멘탈 < 25) return { id: "rest", tweet: false };
+    // 떡밥은 트윗해야 팔로워가 붙는다 (그리고 논란성·멘탈을 대가로 낸다)
+    var beef = acts.filter(function (a) { return a.id === "beef_watch"; })[0];
+    return beef ? { id: "beef_watch", tweet: true } : { id: "trend", tweet: false };
   }
 };
 
@@ -46,7 +50,7 @@ Object.keys(strategies).forEach(function (name, si) {
     var acts = game.getActions();
     assert.ok(acts.length > 0, name + ": 가능한 행동이 없음");
     var chosen = strategies[name](acts, rand, game.getState());
-    var result = game.advanceTurn(chosen.id);
+    var result = game.advanceTurn(chosen.id, chosen.tweet);
     var st = game.getState();
     Object.keys(st.stats).forEach(function (k) {
       assert.ok(st.stats[k] >= 0, name + ": 스탯 " + k + " 음수");

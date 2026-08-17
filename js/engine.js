@@ -62,9 +62,35 @@
       });
       data.actions.forEach(function (a) {
         if (!a.requires || checkCond(a.requires, state))
-          list.push({ id: a.id, label: a.label, kind: a.type });
+          list.push({ id: a.id, label: a.label, kind: "action", effects: a.effects });
       });
       return list;
+    }
+
+    // "이걸 트윗할까?"를 물어보기 전에 UI가 결과를 보여줄 수 있도록 수식을 미리 계산해준다.
+    // 읽기 전용 — 상태를 바꾸지 않는다.
+    function previewAction(actionId) {
+      var action = data.actions.filter(function (a) { return a.id === actionId; })[0];
+      if (!action) return null;
+
+      function evaluated(effects, against) {
+        var out = {};
+        Object.keys(effects || {}).forEach(function (k) { out[k] = evalFormula(effects[k], against); });
+        return out;
+      }
+      var effects = evaluated(action.effects, state);
+
+      // 트윗 수식은 "행동 효과가 적용된 뒤"의 스탯으로 계산해야 실제 적용값과 일치한다.
+      // (advanceTurn이 행동 효과 → 트윗 효과 순으로 적용하므로)
+      var after = { followers: state.followers, stats: {} };
+      Object.keys(state.stats).forEach(function (k) { after.stats[k] = state.stats[k]; });
+      Object.keys(effects).forEach(function (k) {
+        if (k === "팔로워") after.followers = Math.max(0, after.followers + effects[k]);
+        else after.stats[k] = Math.max(0, (after.stats[k] || 0) + effects[k]);
+      });
+
+      return { id: action.id, label: action.label, effects: effects,
+        tweetEffects: evaluated(action.tweet && action.tweet.effects, after) };
     }
 
     function pick(arr) { return arr[Math.floor(rand() * arr.length)]; }
@@ -90,7 +116,9 @@
       });
     }
 
-    function advanceTurn(actionId) {
+    // doTweet: 행동을 트윗으로 올릴지. 행동 효과는 무조건, 트윗 효과는 doTweet일 때만 적용된다.
+    // 이벤트 선택지("event:…")는 그 자체가 대응이라 doTweet를 보지 않는다.
+    function advanceTurn(actionId, doTweet) {
       var feedItems = [], statChanges = {}, triggeredEvents = [];
 
       if (actionId.indexOf("event:") === 0) {
@@ -111,16 +139,17 @@
         var action = data.actions.filter(function (a) { return a.id === actionId; })[0];
         if (action) {
           applyEffects(action.effects, statChanges);
-          var gain = Math.max(0, statChanges["팔로워"] || 0);
-          var tweet = {
-            author: "me", text: fillTemplate(pick(action.templates)), day: state.day,
-            likes: gain * 2 + Math.floor(rand() * 10), rts: Math.floor(gain / 2), kind: "me"
-          };
-          feedItems.push(tweet);
-          state.tweetLog.push(tweet);
-          if (action.category) {
+          if (doTweet && action.tweet) {
+            applyEffects(action.tweet.effects, statChanges);
+            var gain = Math.max(0, statChanges["팔로워"] || 0);
+            var tweet = {
+              author: "me", text: fillTemplate(pick(action.tweet.templates)), day: state.day,
+              likes: gain * 2 + Math.floor(rand() * 10), rts: Math.floor(gain / 2), kind: "me"
+            };
+            feedItems.push(tweet);
+            state.tweetLog.push(tweet);
             data.npcs.forEach(function (npc) {
-              if (npc.reactsTo.indexOf(action.category) !== -1 && rand() < 0.6)
+              if (npc.reactsTo.indexOf(action.tweet.category) !== -1 && rand() < 0.6)
                 feedItems.push({ author: npc.handle, name: npc.name, text: pick(npc.replies), day: state.day, kind: "reply" });
             });
           }
@@ -155,7 +184,8 @@
       state.day += 1;
       return { feedItems: feedItems, statChanges: statChanges, triggeredEvents: triggeredEvents, ending: ending };
     }
-    return { getState: function () { return state; }, getActions: getActions, advanceTurn: advanceTurn };
+    return { getState: function () { return state; }, getActions: getActions,
+      previewAction: previewAction, advanceTurn: advanceTurn };
   }
 
   return { _utils: { compare: compare, checkCond: checkCond, evalFormula: evalFormula }, create: create };

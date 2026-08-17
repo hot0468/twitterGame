@@ -1,7 +1,15 @@
 # 트위터 UI 육성 게임
 
 트위터 UI 기반 턴제 육성 게임. 하루=1턴, 팔로워 임계값 도달 시 스탯·이벤트 이력으로 멀티 엔딩 판정.
-전체 설계는 `docs/superpowers/specs/2026-08-17-twitter-game-design.md` — **구조 질문이 생기면 코드 탐색 전에 이 문서부터 읽을 것.**
+설계 문서는 `docs/superpowers/specs/2026-08-17-twitter-game-design.md`(초기 설계 — 아래 "핵심 루프"가 최신).
+
+## 핵심 루프 (불변)
+
+**행동 하나 = 하루.** 컴포즈 박스 → 행동 선택 팝업 → **"이걸 트윗할까?"** → 날짜 전환 팝업 → 다음 날.
+- 별도의 "다음 날" 버튼은 없다. 행동을 마치면 하루가 자동으로 넘어간다.
+- `effects`(행동 효과)는 트윗 여부와 무관하게 항상 적용된다. `tweet.effects`는 트윗을 택했을 때만.
+- **리스크는 전부 `tweet.effects`에 둔다**(논란성 상승·멘탈 소모). 트윗을 안 하면 안전하지만 팔로워도 안 는다 — 이 교환이 게임의 핵심 선택이다.
+- 이벤트 대응(`event:…`)은 그 자체가 반응이라 트윗 여부를 묻지 않는다.
 
 ## 아키텍처 규칙 (불변)
 
@@ -9,9 +17,13 @@
 - `js/engine.js` — 순수 게임 로직. **DOM을 절대 모름.** Node에서 직접 실행 가능해야 함.
 - `js/ui.js` — 렌더링·클릭 처리만. 게임 규칙을 넣지 말 것.
 - `js/main.js` — 초기화, 데이터 로드, localStorage 저장.
-- `js/icons.js` — lucide 아이콘 SVG path 모음 + `Icons.svg(name, size)` / `Icons.mount()`.
+- `js/icons.js` — lucide 아이콘 SVG path 모음 + `Icons.svg(name)` / `Icons.mount()`.
 - `data/*.js` — 모든 게임 콘텐츠(행동·NPC·이벤트·엔딩). 순수 데이터 리터럴만, 로직 금지. **콘텐츠 추가/밸런스 조정은 코드가 아니라 여기서.** (json이 아닌 이유: file:// 에서 fetch가 CORS로 막힘)
-- 엔진 공개 인터페이스는 `advanceTurn(actionId)` 하나. 반환: `{ feedItems, statChanges, triggeredEvents, ending | null }`.
+- 엔진 공개 API 3개:
+  - `getActions()` → `[{ id, label, kind, effects }]` (requires 미충족은 제외)
+  - `previewAction(id)` → `{ label, effects, tweetEffects }` — 읽기 전용. **트윗 수식은 행동 효과가 적용된 뒤의 스탯으로 계산해야 실제와 일치한다**(안 그러면 팝업이 +20이라 하고 실제로 +26이 붙는다. 회귀 테스트 있음).
+  - `advanceTurn(id, doTweet)` → `{ feedItems, statChanges, triggeredEvents, ending | null }`
+- **날짜는 엔진이 모른다.** 엔진은 `day`만 세고, "3월 2일 (월)" 표기는 `ui.js`의 `START`/`dateLabel()`이 담당. 1일차 = 2026-03-02(월).
 
 ## UI 규칙 (불변)
 
@@ -23,7 +35,9 @@
 - **아이콘 크기도 CSS가 정한다** (`.icon { width: 1.35em }` + 필요한 곳만 rem 오버라이드). `Icons.svg()`에 크기 인자는 없다.
 - 작은 크기(13px 내외)에 쓸 아이콘은 path 2~3개짜리 단순한 것만 고른다(brain·dumbbell처럼 복잡한 건 뭉개짐).
 - 스탯 패널은 사이드바 하단(새 게임 버튼 위)에 상주. 프로필 화면은 실제 X 구조(배너→겹친 아바타→소개→탭)만 담는다.
-- **모바일(≤640px)은 실제 X 앱 구조**: 사이드바 → 하단 고정 독바(홈/알림/프로필/스탯/새게임), 다음 날 → 우하단 FAB, 스탯 → 독바의 스탯 버튼을 누르면 뜨는 팝오버. 사이드바를 좁히는 방식으로 돌아가지 말 것.
+- **모바일(≤640px)은 실제 X 앱 구조**: 사이드바 → 하단 고정 독바(홈/알림/프로필/스탯/새게임), 스탯 → 독바의 스탯 버튼을 누르면 뜨는 팝오버, 딤팝업은 하단 시트로. 사이드바를 좁히는 방식으로 돌아가지 말 것.
+- 딤팝업 4종은 `.overlay` + `.card`를 공유한다: `#compose-modal`(행동 선택) / `#tweet-modal`(트윗 여부) / `#day-modal`(날짜 전환, 카드 없이 큰 글씨) / `#ending-overlay`. 모바일에서 `.overlay .card { max-width: none }`으로 데스크톱 상한을 풀어야 폭을 채운다.
+- `#tweet-modal`은 딤 클릭으로 닫히지 않는다(의도). 두 버튼 중 하나를 골라야 하며, 안 그러면 행동이 적용되지 않은 채 남는다.
 - 스탯 마운트 지점이 둘(`[data-stats]` 두 곳)인 이유: 데스크톱은 사이드바 상주, 모바일은 팝오버인데 CSS로는 DOM 부모를 옮길 수 없다. ui.js가 두 곳에 같이 렌더하고 CSS가 하나만 보여준다.
 - `#stats-toggle`도 `.nav-btn`이지만 `data-view`가 없다. 뷰 관련 순회는 반드시 `.nav-btn[data-view]`로 한정할 것 — 안 하면 `switchView(undefined)`로 전체 뷰가 사라진다.
 - 함정: sticky였던 요소를 모바일에서 `position: fixed; bottom: 0`으로 바꿀 때 `top: auto`를 반드시 같이 준다. 데스크톱의 `top: 0`이 남으면 위아래로 늘어나 화면 전체를 덮고 클릭을 먹는다(실제로 겪음).

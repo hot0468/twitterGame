@@ -15,7 +15,6 @@
       <button class="nav-btn" data-view="profile"><span data-icon="user"></span><span class="label">프로필</span></button>
       <!-- 모바일 독바에만 보이는 스탯 팝오버 토글 (데스크톱은 사이드바에 스탯이 상주하므로 숨김) -->
       <button id="stats-toggle" class="nav-btn stats-toggle" aria-expanded="false"><span data-icon="chart-column"></span><span class="label">스탯</span></button>
-      <button id="next-day" class="next-day" disabled><span class="label">다음 날</span><span data-icon="arrow-right"></span></button>
       <div class="stats-panel" data-stats></div>
       <button id="new-game" class="new-game"><span data-icon="rotate-ccw"></span><span class="label">새 게임</span></button>
     </nav>
@@ -34,7 +33,6 @@
           <div class="avatar" data-icon="circle-user"></div>
           <div class="compose-hint">무슨 일이 일어나고 있나요?</div>
         </div>
-        <div id="action-list" class="action-list hidden"></div>
         <div id="feed" class="feed"></div>
       </section>
 
@@ -66,6 +64,37 @@
         <div id="notif-list" class="feed"></div>
       </section>
     </main>
+  </div>
+
+  <!-- 행동 선택 딤팝업 -->
+  <div id="compose-modal" class="overlay hidden">
+    <div class="card compose-card">
+      <div class="modal-head">
+        <h3>오늘 무엇을 할까?</h3>
+        <button id="compose-close" class="icon-btn" data-icon="x" aria-label="닫기"></button>
+      </div>
+      <div id="action-list" class="action-list"></div>
+    </div>
+  </div>
+
+  <!-- 트윗 여부 선택 딤팝업 (행동 후) -->
+  <div id="tweet-modal" class="overlay hidden">
+    <div class="card tweet-card">
+      <h3 id="tweet-title">이걸 트윗할까?</h3>
+      <div id="tweet-preview" class="preview"></div>
+      <div class="modal-actions">
+        <button id="tweet-skip" class="btn-ghost">안 올린다</button>
+        <button id="tweet-post" class="btn-primary">트윗한다</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 날짜 전환 딤팝업 -->
+  <div id="day-modal" class="overlay day-overlay hidden">
+    <div class="day-card">
+      <div id="day-modal-num" class="day-num">1일차</div>
+      <div id="day-modal-date" class="day-date">3월 2일 (월)</div>
+    </div>
   </div>
 
   <div id="ending-overlay" class="overlay hidden"></div>

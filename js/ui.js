@@ -3,6 +3,15 @@ var UI = (function () {
 
   // 스탯별 아이콘·색조. 프레젠테이션 전용 — 엔진은 스탯 이름만 안다.
   // 논란성만 위험색(hot)인 건 의도: 성장 가속 페달이자 리스크라는 걸 색으로 알린다.
+  // 1일차 = 2026년 3월 2일(월). 엔진은 날짜를 모르고 day만 센다 — 표기는 UI 몫.
+  var START = { year: 2026, monthIndex: 2, date: 2 };
+  var WEEKDAY = ["일", "월", "화", "수", "목", "금", "토"];
+
+  function dateLabel(day) {
+    var d = new Date(START.year, START.monthIndex, START.date + (day - 1));
+    return (d.getMonth() + 1) + "월 " + d.getDate() + "일 (" + WEEKDAY[d.getDay()] + ")";
+  }
+
   var STAT_STYLE = {
     "글빨": { icon: "feather", tone: "ink" },
     "유머": { icon: "laugh", tone: "warm" },
@@ -71,7 +80,7 @@ var UI = (function () {
   }
 
   function renderAll(state) {
-    $("day").textContent = state.day + "일차";
+    $("day").textContent = state.day + "일차 · " + dateLabel(state.day);
     $("followers").textContent = "팔로워 " + state.followers.toLocaleString();
     renderFeed($("feed"), state.feed, "타임라인이 조용합니다. 첫 트윗을 써보세요.");
     renderProfile(state);
@@ -97,23 +106,66 @@ var UI = (function () {
     badge.classList.toggle("hidden", pending === 0);
   }
 
+  // { 글빨: 2, 팔로워: -5 } → "글빨 +2, 팔로워 -5"
+  function effectsText(effects) {
+    return Object.keys(effects || {}).map(function (k) {
+      var v = effects[k];
+      return k + " " + (v >= 0 ? "+" : "") + v;
+    }).join("  ");
+  }
+
   function showActions(actions, onPick) {
     var list = $("action-list");
     list.innerHTML = "";
     actions.forEach(function (a) {
       var item = document.createElement("div");
       item.className = "action-item" + (a.kind === "event" ? " event" : "");
-      var kindIcon = a.kind === "event" ? "zap" : a.kind === "tweet" ? "pen-line" : "book-open";
-      var kindText = a.kind === "event" ? "이벤트 대응" : a.kind === "tweet" ? "트윗" : "자기계발";
-      item.innerHTML = '<span class="label"></span><span class="kind">' + Icons.svg(kindIcon) + kindText + "</span>";
+      var right = a.kind === "event"
+        ? Icons.svg("zap") + "이벤트 대응"
+        : effectsText(a.effects) || "—";
+      item.innerHTML = '<span class="label"></span><span class="kind">' + right + "</span>";
       item.querySelector(".label").textContent = a.label;
       item.onclick = function () { onPick(a.id); };
       list.appendChild(item);
     });
-    list.classList.remove("hidden");
+    $("compose-modal").classList.remove("hidden");
   }
 
-  function hideActions() { $("action-list").classList.add("hidden"); }
+  function hideActions() { $("compose-modal").classList.add("hidden"); }
+
+  // 행동을 고른 뒤 "이걸 트윗할까?" — preview는 engine.previewAction() 결과
+  function openTweetPrompt(preview) {
+    $("tweet-title").textContent = "‘" + preview.label + "’ — 트윗할까?";
+    var gained = effectsText(preview.effects);
+    var onPost = effectsText(preview.tweetEffects);
+    $("tweet-preview").innerHTML =
+      '<div class="preview-row"><span class="preview-label">한 일</span><b class="done"></b></div>' +
+      '<div class="preview-row"><span class="preview-label">트윗하면</span><b class="post"></b></div>';
+    $("tweet-preview").querySelector(".done").textContent = gained || "스탯 변화 없음";
+    $("tweet-preview").querySelector(".post").textContent = onPost || "변화 없음";
+    $("tweet-modal").classList.remove("hidden");
+  }
+
+  function closeTweetPrompt() { $("tweet-modal").classList.add("hidden"); }
+
+  // 하루가 넘어갈 때 날짜를 띄운다. 탭하면 즉시, 아니면 1.4초 후 닫히고 onDone 호출.
+  function showDayTransition(day, onDone) {
+    var modal = $("day-modal");
+    $("day-modal-num").textContent = day + "일차";
+    $("day-modal-date").textContent = dateLabel(day);
+    modal.classList.remove("hidden");
+    var done = false;
+    function finish() {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      modal.onclick = null;
+      modal.classList.add("hidden");
+      if (onDone) onDone();
+    }
+    var timer = setTimeout(finish, 1400);
+    modal.onclick = finish;
+  }
 
   // 모바일 스탯 팝오버. 데스크톱에선 .stats-strip이 CSS로 계속 숨겨져 있어 아무 영향 없다.
   function setStatsOpen(open) {
@@ -128,16 +180,10 @@ var UI = (function () {
 
   function closeStats() { setStatsOpen(false); }
 
-  function setTurnDone(done) {
-    $("next-day").disabled = !done;
-    $("compose").style.opacity = done ? "0.4" : "1";
-    $("compose").style.pointerEvents = done ? "none" : "auto";
-  }
-
   function showEnding(ending, onNewGame) {
     var ov = $("ending-overlay");
     ov.innerHTML = '<div class="card"><div class="trophy">' + Icons.svg("trophy") +
-      "</div><h1></h1><p></p><button>새 게임</button></div>";
+      '</div><h1></h1><p></p><button class="btn-primary">새 게임</button></div>';
     ov.querySelector("h1").textContent = ending.title;
     ov.querySelector("p").textContent = ending.text;
     ov.querySelector("button").onclick = onNewGame;
@@ -155,7 +201,9 @@ var UI = (function () {
   }
 
   return { renderAll: renderAll, showActions: showActions, hideActions: hideActions,
-    setTurnDone: setTurnDone, showEnding: showEnding, switchView: switchView,
+    openTweetPrompt: openTweetPrompt, closeTweetPrompt: closeTweetPrompt,
+    showDayTransition: showDayTransition, dateLabel: dateLabel,
+    showEnding: showEnding, switchView: switchView,
     setProfileTab: setProfileTab, toggleStats: toggleStats, closeStats: closeStats };
 })();
 if (typeof module !== "undefined") module.exports = UI;
