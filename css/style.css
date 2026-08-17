@@ -29,7 +29,9 @@ body { background: var(--bg); color: var(--text); font-size: var(--fs-sm);
 /* 아이콘 크기는 주변 글씨에 비례한다 — 개별 px 지정 없음 */
 .icon { display: block; flex-shrink: 0; width: 1.35em; height: 1.35em; }
 
-.app { display: flex; max-width: 900px; margin: 0 auto; min-height: 100vh; }
+/* 사이드바 + 본문 + 우측 레일. 레일이 본문 폭을 줄여줘서 트윗 줄이 짧아진다
+   (레일 없이 900px이면 본문이 ~725px라 140자 트윗이 한 줄로 길게 늘어졌다) */
+.app { display: flex; max-width: 1080px; margin: 0 auto; min-height: 100vh; }
 
 /* ── 사이드바 ────────────────────────────────── */
 .sidebar { width: 13.5rem; padding: 10px 7px; border-right: 1px solid var(--border);
@@ -157,6 +159,38 @@ body { background: var(--bg); color: var(--text); font-size: var(--fs-sm);
 .tweet.detail { padding: 14px; }
 .tweet.detail .text { font-size: var(--fs-md); margin: 5px 0 9px; }
 .tweet.detail .meta { padding-top: 9px; border-top: 1px solid var(--border); }
+
+/* ── 우측 레일 ──────────────────────────────────── */
+/* 스크롤해도 붙어 있어야 계정 목록을 계속 쓸 수 있다 (align-self 없으면 세로로 늘어난다) */
+.rail { width: 21rem; flex-shrink: 0; padding: 10px 14px;
+  position: sticky; top: 0; align-self: flex-start; }
+.rail-box { background: var(--hover); border-radius: 16px; padding: 12px 0 4px; margin-bottom: 14px; }
+.rail-box h2 { font-size: var(--fs-lg); padding: 0 14px 6px; }
+
+.rail-account { display: flex; align-items: center; gap: 9px; padding: 8px 14px; cursor: pointer; }
+.rail-account:hover { background: #eaf0f1; }
+.rail-account .avatar { width: 2.2rem; height: 2.2rem; }
+.rail-id { min-width: 0; flex: 1; }
+.rail-id b { display: block; font-size: var(--fs-sm);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rail-id span { color: var(--muted); font-size: var(--fs-xs); }
+.rail-count { color: var(--muted); font-size: var(--fs-xs); flex-shrink: 0;
+  font-variant-numeric: tabular-nums; }
+
+.rail-trend { padding: 7px 14px; }
+.rail-trend .cat, .rail-trend .cnt { display: block; color: var(--muted); font-size: var(--fs-xs); }
+.rail-trend b { font-size: var(--fs-sm); }
+
+.rail-more { display: block; width: 100%; text-align: left; padding: 9px 14px;
+  background: none; border: none; border-radius: 0 0 16px 16px; color: var(--accent);
+  font-family: inherit; font-size: var(--fs-sm); cursor: pointer; }
+.rail-more:hover { background: #eaf0f1; }
+.rail-empty { padding: 2px 14px 10px; color: var(--muted); font-size: var(--fs-xs); }
+
+/* 폭이 좁으면 레일을 접는다 — 본문을 눌러버리면 오히려 읽기 나빠진다 */
+@media (max-width: 1000px) {
+  .rail { display: none; }
+}
 
 /* ── 주간 정산 카드 ────────────────────────────── */
 /* 주 1회뿐인 항목이라 트윗보다 존재감을 준다. 순수입이 마이너스면 색이 뒤집힌다 */

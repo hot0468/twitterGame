@@ -264,6 +264,85 @@ var UI = (function () {
     renderFeed($("tweet-detail-replies"), replies, "아직 답글이 없습니다.");
   }
 
+  // ── 우측 레일 ──────────────────────────────────
+  var RAIL_LIMIT = 6;      // 처음엔 이만큼만 보이고 "더 보기"로 전부 펼친다
+  var RAIL_TRENDS = 5;
+  var railExpanded = false;
+
+  function toggleRailMore() { railExpanded = !railExpanded; }
+
+  // 팔로우 중인(=이미 만난) 계정만 보여준다. 아직 못 만난 계정을 띄우면 발견의 재미가 사라지고,
+  // 그 계정 프로필에는 아직 트윗이 하나도 없어서 눌러도 빈 화면이 뜬다.
+  function renderRailAccounts(state) {
+    var list = ((typeof GAME_DATA !== "undefined" && GAME_DATA.npcs) || [])
+      .filter(function (n) { return state.npcSeen && state.npcSeen[n.handle] != null; })
+      .sort(function (a, b) { return (b.followers || 0) - (a.followers || 0); });
+
+    var box = $("rail-accounts");
+    box.innerHTML = "";
+    if (!list.length) {
+      var none = document.createElement("div");
+      none.className = "rail-empty";
+      none.textContent = "아직 만난 계정이 없습니다.";
+      box.appendChild(none);
+    }
+    (railExpanded ? list : list.slice(0, RAIL_LIMIT)).forEach(function (n) {
+      var row = document.createElement("div");
+      row.className = "rail-account";
+      row.dataset.account = n.handle; // main.js의 클릭 위임이 프로필로 보낸다
+      row.innerHTML = '<div class="avatar small">' + pfp(n.handle) + "</div>" +
+        '<div class="rail-id"><b></b><span></span></div><span class="rail-count"></span>';
+      row.querySelector("b").textContent = n.name;
+      row.querySelector(".rail-id span").textContent = n.handle;
+      row.querySelector(".rail-count").textContent = (n.followers || 0).toLocaleString();
+      box.appendChild(row);
+    });
+    var more = $("rail-more");
+    more.classList.toggle("hidden", list.length <= RAIL_LIMIT);
+    more.textContent = railExpanded ? "접기" : "더 보기";
+  }
+
+  // 트렌드는 꾸밈이 아니라 실제 집계다 — data.fills의 소재가 몇 번 트윗됐는지 센다.
+  // 내 피드가 아니라 "네트워크 전체"(모든 계정의 보관함 + 내 트윗)를 센다. 실제 트렌드도
+  // 내가 본 것만 세지 않고, 피드만 세면 첫날엔 표본이 10개뿐이라 대개 0건으로 비어 버린다.
+  // 보관함 항목이 피드에도 있으므로 피드는 빼야 중복 집계가 안 된다.
+  function renderRailTrends(state) {
+    var fills = (typeof GAME_DATA !== "undefined" && GAME_DATA.fills) || {};
+    var boxes = state.npcTweets || {};
+    var corpus = state.tweetLog.slice();
+    Object.keys(boxes).forEach(function (h) { corpus = corpus.concat(boxes[h]); });
+
+    var hits = [];
+    Object.keys(fills).forEach(function (cat) {
+      fills[cat].forEach(function (topic) {
+        var n = corpus.filter(function (t) {
+          return t.text && t.text.indexOf(topic) !== -1;
+        }).length;
+        if (n > 0) hits.push({ cat: cat, topic: topic, n: n });
+      });
+    });
+    hits.sort(function (a, b) { return b.n - a.n; });
+
+    var box = $("rail-trends");
+    box.innerHTML = "";
+    if (!hits.length) {
+      var quiet = document.createElement("div");
+      quiet.className = "rail-empty";
+      quiet.textContent = "타임라인이 조용합니다.";
+      box.appendChild(quiet);
+      return;
+    }
+    hits.slice(0, RAIL_TRENDS).forEach(function (h) {
+      var row = document.createElement("div");
+      row.className = "rail-trend";
+      row.innerHTML = '<span class="cat"></span><b></b><span class="cnt"></span>';
+      row.querySelector(".cat").textContent = h.cat + " · 실시간 트렌드";
+      row.querySelector("b").textContent = h.topic;
+      row.querySelector(".cnt").textContent = "트윗 " + h.n.toLocaleString() + "건";
+      box.appendChild(row);
+    });
+  }
+
   var profileTab = "posts";
   // null = 내 프로필. 남의 프로필을 보는 중이면 그 계정의 핸들이 들어간다.
   var profileHandle = null;
@@ -342,6 +421,8 @@ var UI = (function () {
     renderFeed($("feed"), timeline, "타임라인이 조용합니다. 첫 트윗을 써보세요.");
     renderProfile(state);
     renderTweetDetail(state);
+    renderRailAccounts(state);
+    renderRailTrends(state);
     // 마운트 지점이 둘(데스크톱=사이드바, 모바일=상단 스트립) — CSS가 하나만 보여준다
     document.querySelectorAll("[data-stats]").forEach(function (panel) {
       panel.innerHTML = "";
@@ -489,6 +570,7 @@ var UI = (function () {
     toggleStats: toggleStats, closeStats: closeStats,
     toggleAccountMenu: toggleAccountMenu, closeAccountMenu: closeAccountMenu,
     openTweetDetail: openTweetDetail, closeTweetDetail: closeTweetDetail,
-    openProfile: openProfile, closeProfile: closeProfile };
+    openProfile: openProfile, closeProfile: closeProfile,
+    toggleRailMore: toggleRailMore };
 })();
 if (typeof module !== "undefined") module.exports = UI;

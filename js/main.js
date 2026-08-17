@@ -12,6 +12,10 @@
   Icons.mount();
 
   var game = Engine.create(GAME_DATA, load());
+  // 새 게임이면 create()가 첫 타임라인(팔로우 계정·그들의 최근 트윗)을 만든다.
+  // 바로 저장해두지 않으면 첫 턴을 돌리기 전에 새로고침할 때마다 다시 뽑혀서
+  // 팔로우한 계정이 바뀐다. 시작 상태도 세이브의 일부다.
+  save(game.getState());
   var pendingAction = null;
 
   function refresh() { UI.renderAll(game.getState()); }
@@ -113,6 +117,7 @@
 
   document.getElementById("detail-back").onclick = function () { UI.closeTweetDetail(); };
   document.getElementById("profile-back").onclick = function () { UI.closeProfile(); };
+  document.getElementById("rail-more").onclick = function () { UI.toggleRailMore(); refresh(); };
 
   document.querySelectorAll(".tab-btn").forEach(function (btn) {
     btn.onclick = function () { UI.setProfileTab(btn.dataset.tab); refresh(); };
