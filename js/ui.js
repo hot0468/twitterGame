@@ -27,17 +27,45 @@ var UI = (function () {
     return div;
   }
 
-  function renderFeed(el, items) {
+  function renderFeed(el, items, emptyText) {
     el.innerHTML = "";
+    if (!items.length) {
+      var empty = document.createElement("div");
+      empty.className = "empty";
+      empty.textContent = emptyText;
+      el.appendChild(empty);
+      return;
+    }
     items.forEach(function (it) { el.appendChild(tweetEl(it)); });
+  }
+
+  var profileTab = "posts";
+
+  function setProfileTab(name) {
+    profileTab = name;
+    document.querySelectorAll(".tab-btn").forEach(function (b) {
+      b.classList.toggle("active", b.dataset.tab === name);
+    });
+  }
+
+  function renderProfile(state) {
+    $("profile-since").textContent = state.day + "일차";
+    $("profile-tweet-count").textContent = state.tweetLog.length;
+    $("profile-followers").textContent = state.followers.toLocaleString();
+    if (profileTab === "posts") {
+      renderFeed($("profile-tweets"), state.tweetLog.slice().reverse(), "아직 쓴 글이 없습니다.");
+    } else {
+      var replies = state.feed.filter(function (f) { return f.kind === "reply"; });
+      renderFeed($("profile-tweets"), replies, "아직 받은 답글이 없습니다.");
+    }
   }
 
   function renderAll(state) {
     $("day").textContent = state.day + "일차";
     $("followers").textContent = "팔로워 " + state.followers.toLocaleString();
-    renderFeed($("feed"), state.feed);
-    renderFeed($("profile-tweets"), state.tweetLog.slice().reverse());
-    var stats = $("profile-stats");
+    renderFeed($("feed"), state.feed, "타임라인이 조용합니다. 첫 트윗을 써보세요.");
+    renderProfile(state);
+    var stats = $("stats-panel");
     stats.innerHTML = "";
     Object.keys(state.stats).forEach(function (k) {
       var row = document.createElement("div");
@@ -48,7 +76,7 @@ var UI = (function () {
       stats.appendChild(row);
     });
     var notifItems = state.feed.filter(function (f) { return f.kind === "event" || f.kind === "system" || f.kind === "reply"; });
-    renderFeed($("notif-list"), notifItems);
+    renderFeed($("notif-list"), notifItems, "아직 알림이 없습니다.");
     var badge = $("notif-badge");
     var pending = state.activeEvents.length;
     badge.textContent = pending;
@@ -99,6 +127,7 @@ var UI = (function () {
   }
 
   return { renderAll: renderAll, showActions: showActions, hideActions: hideActions,
-    setTurnDone: setTurnDone, showEnding: showEnding, switchView: switchView };
+    setTurnDone: setTurnDone, showEnding: showEnding, switchView: switchView,
+    setProfileTab: setProfileTab };
 })();
 if (typeof module !== "undefined") module.exports = UI;

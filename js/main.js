@@ -42,6 +42,10 @@
     btn.onclick = function () { UI.switchView(btn.dataset.view); };
   });
 
+  document.querySelectorAll(".tab-btn").forEach(function (btn) {
+    btn.onclick = function () { UI.setProfileTab(btn.dataset.tab); refresh(); };
+  });
+
   function newGame() {
     localStorage.removeItem(SAVE_KEY);
     location.reload();

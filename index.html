@@ -14,6 +14,7 @@
       <button class="nav-btn" data-view="notif"><span data-icon="bell"></span><span class="label">알림</span><span id="notif-badge" class="badge hidden"></span></button>
       <button class="nav-btn" data-view="profile"><span data-icon="user"></span><span class="label">프로필</span></button>
       <button id="next-day" class="next-day" disabled><span class="label">다음 날</span><span data-icon="arrow-right" data-icon-size="18"></span></button>
+      <div id="stats-panel" class="stats-panel"></div>
       <button id="new-game" class="new-game"><span data-icon="rotate-ccw" data-icon-size="14"></span><span class="label">새 게임</span></button>
     </nav>
 
@@ -33,12 +34,26 @@
       </section>
 
       <section id="view-profile" class="view hidden">
-        <div class="profile-header">
-          <div class="avatar big" data-icon="circle-user" data-icon-size="40"></div>
-          <h2>나</h2><span class="handle">@me</span>
+        <div class="profile-banner"></div>
+        <div class="profile-top">
+          <div class="avatar big" data-icon="circle-user" data-icon-size="44"></div>
         </div>
-        <div id="profile-stats" class="profile-stats"></div>
-        <h3 class="section-title">내 트윗</h3>
+        <div class="profile-info">
+          <h2 class="profile-name">나</h2>
+          <div class="handle">@me</div>
+          <p class="profile-bio">트위터에서 뭐라도 되어보려는 사람.<br>오늘도 타임라인에 글을 하나 던집니다.</p>
+          <div class="profile-meta">
+            <span><span data-icon="calendar" data-icon-size="15"></span><span id="profile-since">1일차</span> 활동 중</span>
+          </div>
+          <div class="profile-counts">
+            <span><b id="profile-tweet-count">0</b> 게시물</span>
+            <span><b id="profile-followers">10</b> 팔로워</span>
+          </div>
+        </div>
+        <div class="profile-tabs">
+          <button class="tab-btn active" data-tab="posts">게시물</button>
+          <button class="tab-btn" data-tab="replies">답글</button>
+        </div>
         <div id="profile-tweets" class="feed"></div>
       </section>
 
