@@ -1,4 +1,4 @@
-var assert = require("assert");
+﻿var assert = require("assert");
 var Engine = require("../js/engine.js");
 var U = Engine._utils;
 
@@ -41,7 +41,7 @@ function loadData() {
   var d = {};
   Object.assign(d, require("../data/actions.js"));
   Object.assign(d, require("../data/npcs.js"));
-  d.events = d.events || [];
+  Object.assign(d, require("../data/events.js"));
   d.endings = d.endings || { threshold: 10000, list: [] };
   return d;
 }
@@ -96,4 +96,44 @@ g6.advanceTurn("tweet_bait");
 // 주의: >= 0 로만 검사할 것 — Task 5에서 멘탈 0은 붕괴 처리로 20이 되므로 === 0 검사는 회귀로 깨진다
 assert.ok(g6.getState().stats.멘탈 >= 0, "스탯은 0 미만으로 안 떨어짐");
 
+
 console.log("Task 3 OK");
+
+// --- Task 4: events ---
+var g7 = Engine.create(loadData(), null, fixedRng); // rand()=0 → chance 무시 항상 발동
+g7.getState().stats.유머 = 15;
+var r3 = g7.advanceTurn("train_meme");
+assert.deepStrictEqual(r3.triggeredEvents, ["viral_humor"], "유머 15 충족 + chance 무시 → 발동");
+assert.ok(r3.feedItems.some(function (f) { return f.kind === "event"; }), "이벤트 피드 추가됨");
+assert.strictEqual(g7.getState().activeEvents.length, 1);
+
+var evActs = g7.getActions().filter(function (a) { return a.kind === "event"; });
+assert.strictEqual(evActs.length, 2, "이벤트 선택지 2개 추가됨");
+assert.strictEqual(evActs[0].id, "event:viral_humor:0");
+
+var before = g7.getState().followers;
+g7.advanceTurn("event:viral_humor:0");
+assert.strictEqual(g7.getState().followers, before + 300);
+assert.strictEqual(g7.getState().activeEvents.length, 0, "end로 종료됨");
+assert.deepStrictEqual(g7.getState().eventHistory, ["viral_humor"]);
+
+var g8 = Engine.create(loadData(), null, fixedRng);
+g8.getState().stats.논란성 = 20;
+g8.getState().stats.멘탈 = 40;
+g8.advanceTurn("rest"); // backlash 발동
+assert.strictEqual(g8.getState().activeEvents.length, 1);
+var r4 = g8.advanceTurn("event:backlash:1"); // 보상 리플 선택 → stage 1
+assert.strictEqual(g8.getState().activeEvents[0].stage, 1, "다단계 진행됨");
+assert.ok(r4.feedItems.some(function (f) { return f.kind === "event"; }), "다음 단계 피드 추가됨");
+var stage1Acts = g8.getActions().filter(function (a) { return a.kind === "event"; });
+assert.strictEqual(stage1Acts.length, 1, "글빨 15 미만이라 '글로 반박' 선택지만");
+
+var g9 = Engine.create(loadData(), null, function () { return 0.99; }); // chance 무시함
+g9.getState().stats.유머 = 15;
+var r5 = g9.advanceTurn("train_meme");
+assert.deepStrictEqual(r5.triggeredEvents, [], "chance 넘음 → 발동 안 함");
+
+console.log("Task 4 OK");
+
+
+

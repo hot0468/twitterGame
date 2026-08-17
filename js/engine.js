@@ -1,4 +1,4 @@
-var Engine = (function () {
+﻿var Engine = (function () {
   var SKILL_STATS = ["글빨", "유머", "감각"];
 
   function compare(actual, expr) {
@@ -84,26 +84,59 @@ var Engine = (function () {
       }
     }
 
+    function pushEventFeed(ev, stageIdx, feedItems) {
+      ev.stages[stageIdx].feed.forEach(function (t) {
+        feedItems.push({ author: "@world", name: "이벤트", text: t, day: state.day, kind: "event" });
+      });
+    }
+
     function advanceTurn(actionId) {
       var feedItems = [], statChanges = {}, triggeredEvents = [];
 
-      var action = data.actions.filter(function (a) { return a.id === actionId; })[0];
-      if (action) {
-        applyEffects(action.effects, statChanges);
-        var gain = Math.max(0, statChanges["팔로워"] || 0);
-        var tweet = {
-          author: "me", text: fillTemplate(pick(action.templates)), day: state.day,
-          likes: gain * 2 + Math.floor(rand() * 10), rts: Math.floor(gain / 2), kind: "me"
-        };
-        feedItems.push(tweet);
-        state.tweetLog.push(tweet);
-        if (action.category) {
-          data.npcs.forEach(function (npc) {
-            if (npc.reactsTo.indexOf(action.category) !== -1 && rand() < 0.6)
-              feedItems.push({ author: npc.handle, name: npc.name, text: pick(npc.replies), day: state.day, kind: "reply" });
-          });
+      if (actionId.indexOf("event:") === 0) {
+        var parts = actionId.split(":");
+        var ev = data.events.filter(function (e) { return e.id === parts[1]; })[0];
+        var ae = state.activeEvents.filter(function (a) { return a.eventId === parts[1]; })[0];
+        var choice = ev.stages[ae.stage].choices[Number(parts[2])];
+        applyEffects(choice.effects, statChanges);
+        feedItems.push({ author: "me", text: choice.label + " 선택지를 고르셨다", day: state.day, likes: 0, rts: 0, kind: "me" });
+        if (choice.next === "end") {
+          state.activeEvents = state.activeEvents.filter(function (a) { return a.eventId !== ev.id; });
+          state.eventHistory.push(ev.id);
+        } else {
+          ae.stage = choice.next;
+          pushEventFeed(ev, ae.stage, feedItems);
+        }
+      } else {
+        var action = data.actions.filter(function (a) { return a.id === actionId; })[0];
+        if (action) {
+          applyEffects(action.effects, statChanges);
+          var gain = Math.max(0, statChanges["팔로워"] || 0);
+          var tweet = {
+            author: "me", text: fillTemplate(pick(action.templates)), day: state.day,
+            likes: gain * 2 + Math.floor(rand() * 10), rts: Math.floor(gain / 2), kind: "me"
+          };
+          feedItems.push(tweet);
+          state.tweetLog.push(tweet);
+          if (action.category) {
+            data.npcs.forEach(function (npc) {
+              if (npc.reactsTo.indexOf(action.category) !== -1 && rand() < 0.6)
+                feedItems.push({ author: npc.handle, name: npc.name, text: pick(npc.replies), day: state.day, kind: "reply" });
+            });
+          }
         }
       }
+
+      data.events.forEach(function (ev) {
+        var done = state.eventHistory.indexOf(ev.id) !== -1;
+        var active = state.activeEvents.some(function (a) { return a.eventId === ev.id; });
+        if (done || active) return;
+        if (checkCond(ev.trigger, state) && rand() < (ev.trigger.chance == null ? 1 : ev.trigger.chance)) {
+          state.activeEvents.push({ eventId: ev.id, stage: 0 });
+          pushEventFeed(ev, 0, feedItems);
+          triggeredEvents.push(ev.id);
+        }
+      });
 
       state.feed = feedItems.concat(state.feed);
       state.day += 1;
@@ -115,3 +148,4 @@ var Engine = (function () {
   return { _utils: { compare: compare, checkCond: checkCond, evalFormula: evalFormula }, create: create };
 })();
 if (typeof module !== "undefined") module.exports = Engine;
+
