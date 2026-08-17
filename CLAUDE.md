@@ -17,7 +17,9 @@
 
 - **이모지 금지.** 아이콘이 필요하면 lucide(https://unpkg.com/lucide-static@1.31.0/icons/<name>.svg)에서 받아 `js/icons.js`의 PATHS에 추가하고 `Icons.svg(name)`로 쓴다.
 - **라이트 테마 단일.** 흰 배경이 기본이고 다크모드 대응은 하지 않는다. 색은 `css/style.css`의 `:root` 변수로만.
-- **크기는 전부 rem.** `css/style.css` 첫 줄 `html { font-size: 70% }`가 UI 전체 스케일 노브다 — 크기 조절 요청은 이 값 하나만 바꾼다. 개별 px font-size를 새로 넣지 말 것.
+- **글씨 최소 12px (하한 불변).** 글씨 크기는 `:root`의 `--fs-xs`~`--fs-xxl`로만 지정한다. 전부 `max(--fs-min, …)`으로 감싸져 있어 스케일 노브를 낮춰도 12px 밑으로 안 내려간다. 규칙에 px/rem font-size를 직접 쓰면 이 하한이 뚫린다 — 새 크기가 필요하면 변수를 추가할 것.
+- **스케일 노브는 `html { font-size }`** (`css/style.css` 첫 줄). 크기 조절 요청은 이 값 하나만 바꾼다. 아이콘·아바타·배너도 rem이라 같이 움직인다.
+- 검증: `node test/check-css.js` — 하한값·변수 형태·raw font-size 유입을 잡는다. CSS를 만졌으면 이걸 돌릴 것.
 - **아이콘 크기도 CSS가 정한다** (`.icon { width: 1.35em }` + 필요한 곳만 rem 오버라이드). `Icons.svg()`에 크기 인자는 없다.
 - 작은 크기(13px 내외)에 쓸 아이콘은 path 2~3개짜리 단순한 것만 고른다(brain·dumbbell처럼 복잡한 건 뭉개짐).
 - 스탯 패널은 사이드바 하단(새 게임 버튼 위)에 상주. 프로필 화면은 실제 X 구조(배너→겹친 아바타→소개→탭)만 담는다.
@@ -27,7 +29,7 @@
 
 - 게임 규칙·수치 관련 작업은 해당 `data/*.js` 파일만 읽으면 됨. js 전체를 읽지 말 것.
 - UI 스타일 작업은 `css/style.css`만, 렌더링 버그는 `ui.js`만 보면 됨.
-- 검증: `node test/engine.test.js` + `node test/sim.js` (자동 플레이 시뮬레이션). 브라우저 열기 전 이걸로 로직 확인.
+- 검증: `node test/engine.test.js` + `node test/sim.js` (자동 플레이 시뮬레이션) + `node test/check-css.js` (글씨 하한). 브라우저 열기 전 이걸로 확인.
 - 스탯 5종: 글빨, 유머, 감각, 멘탈, 논란성. 이름·역할은 설계 문서 2절 참고.
 
 ## 언어
