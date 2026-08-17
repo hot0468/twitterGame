@@ -1,0 +1,68 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #000; color: #e7e9ea; font-family: "Segoe UI", "Malgun Gothic", sans-serif; }
+.hidden { display: none !important; }
+
+.app { display: flex; max-width: 900px; margin: 0 auto; min-height: 100vh; }
+
+.sidebar { width: 200px; padding: 12px; border-right: 1px solid #2f3336;
+  display: flex; flex-direction: column; gap: 4px; position: sticky; top: 0; height: 100vh; }
+.logo { font-size: 28px; padding: 8px 12px; }
+.nav-btn { background: none; border: none; color: #e7e9ea; font-size: 17px; text-align: left;
+  padding: 12px; border-radius: 24px; cursor: pointer; }
+.nav-btn:hover { background: #181818; }
+.nav-btn.active { font-weight: 700; }
+.badge { background: #1d9bf0; border-radius: 10px; padding: 1px 7px; font-size: 12px; }
+.next-day { margin-top: 16px; background: #1d9bf0; border: none; color: #fff; font-size: 16px;
+  font-weight: 700; padding: 12px; border-radius: 24px; cursor: pointer; }
+.next-day:disabled { opacity: 0.4; cursor: default; }
+.new-game { margin-top: auto; background: none; border: 1px solid #536471; color: #71767b;
+  padding: 8px; border-radius: 24px; cursor: pointer; font-size: 13px; }
+
+.main { flex: 1; border-right: 1px solid #2f3336; min-width: 0; }
+.topbar { display: flex; justify-content: space-between; padding: 14px 16px;
+  border-bottom: 1px solid #2f3336; font-weight: 700; position: sticky; top: 0;
+  background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); z-index: 5; }
+
+.compose { display: flex; gap: 12px; padding: 16px; border-bottom: 1px solid #2f3336; cursor: pointer; }
+.compose:hover { background: #080808; }
+.compose-hint { color: #536471; font-size: 20px; align-self: center; }
+.avatar { width: 40px; height: 40px; border-radius: 50%; background: #333;
+  display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; }
+.avatar.big { width: 64px; height: 64px; font-size: 36px; }
+
+.action-list { border-bottom: 1px solid #2f3336; }
+.action-item { padding: 12px 16px; cursor: pointer; display: flex; justify-content: space-between; }
+.action-item:hover { background: #181818; }
+.action-item .kind { color: #536471; font-size: 13px; }
+.action-item.event { color: #1d9bf0; font-weight: 700; }
+
+.tweet { display: flex; gap: 12px; padding: 12px 16px; border-bottom: 1px solid #2f3336; }
+.tweet .body { min-width: 0; }
+.tweet .who { font-weight: 700; }
+.tweet .handle, .tweet .meta { color: #536471; font-size: 13px; }
+.tweet .text { margin: 4px 0; white-space: pre-wrap; word-break: break-word; }
+.tweet.event { background: #0a1420; }
+.tweet.system { background: #1a1006; }
+
+.profile-header { display: flex; gap: 16px; align-items: center; padding: 16px; border-bottom: 1px solid #2f3336; }
+.handle { color: #536471; }
+.profile-stats { padding: 16px; border-bottom: 1px solid #2f3336; display: grid;
+  grid-template-columns: 1fr 1fr; gap: 8px; }
+.stat-row { display: flex; justify-content: space-between; padding: 6px 10px;
+  background: #16181c; border-radius: 8px; }
+.section-title { padding: 12px 16px; border-bottom: 1px solid #2f3336; }
+
+.overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 100;
+  display: flex; align-items: center; justify-content: center; text-align: center; }
+.overlay .card { background: #16181c; border: 1px solid #2f3336; border-radius: 16px;
+  padding: 40px; max-width: 420px; }
+.overlay h1 { color: #1d9bf0; margin-bottom: 12px; }
+.overlay p { color: #e7e9ea; line-height: 1.6; margin-bottom: 24px; }
+.overlay button { background: #1d9bf0; border: none; color: #fff; font-weight: 700;
+  padding: 12px 32px; border-radius: 24px; cursor: pointer; font-size: 16px; }
+
+@media (max-width: 640px) {
+  .sidebar { width: 64px; }
+  .nav-btn { font-size: 20px; padding: 10px 6px; text-align: center; }
+  .nav-btn .label, .next-day .label { display: none; }
+}
