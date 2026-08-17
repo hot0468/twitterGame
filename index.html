@@ -16,7 +16,25 @@
       <!-- 모바일 독바에만 보이는 스탯 팝오버 토글 (데스크톱은 사이드바에 스탯이 상주하므로 숨김) -->
       <button id="stats-toggle" class="nav-btn stats-toggle" aria-expanded="false"><span data-icon="chart-column"></span><span class="label">스탯</span></button>
       <div class="stats-panel" data-stats></div>
-      <button id="new-game" class="new-game"><span data-icon="rotate-ccw"></span><span class="label">새 게임</span></button>
+
+      <!-- 실제 X 사이드바 하단의 계정 블록. 누르면 로그아웃 팝오버가 뜬다.
+           팝오버를 블록 기준 bottom:100%로 붙이기 위해 감싸는 컨테이너가 필요하다 -->
+      <div class="account-block">
+        <button id="account" class="account" aria-haspopup="menu" aria-expanded="false">
+          <span class="avatar small" data-icon="circle-user"></span>
+          <span class="account-id label">
+            <span class="account-name">나</span>
+            <span class="account-handle">@me</span>
+          </span>
+          <span class="account-more label" data-icon="ellipsis"></span>
+        </button>
+
+        <div id="account-menu" class="account-menu hidden" role="menu">
+          <button id="logout" class="menu-item" role="menuitem">
+            <span data-icon="log-out"></span><span>@me 계정에서 로그아웃</span>
+          </button>
+        </div>
+      </div>
     </nav>
 
     <main class="main">

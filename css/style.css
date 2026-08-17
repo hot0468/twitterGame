@@ -66,10 +66,33 @@ body { background: var(--bg); color: var(--text); font-size: var(--fs-sm);
 .stats-strip { display: none; }
 .stats-toggle { display: none; }
 
-.new-game { display: flex; align-items: center; justify-content: center; gap: 6px;
-  margin-top: 9px; background: none; border: 1px solid #cfd9de; color: var(--muted);
-  font-family: inherit; font-size: var(--fs-xs); padding: 8px; border-radius: 24px; cursor: pointer; }
-.new-game:hover { background: var(--hover); }
+/* 계정 블록 (실제 X 사이드바 하단) + 로그아웃 팝오버.
+   메뉴는 사이드바 기준 absolute — 사이드바가 데스크톱 sticky / 모바일 fixed라
+   양쪽 모두 이 블록 바로 위에 뜬다. */
+.account-block { position: relative; margin-top: 9px; }
+.account { display: flex; align-items: center; gap: 9px; width: 100%;
+  padding: 8px 9px; background: none; border: none;
+  border-radius: 999px; cursor: pointer; font-family: inherit;
+  color: var(--text); text-align: left; }
+.account:hover, .account.active { background: var(--hover); }
+.account-id { min-width: 0; flex: 1; display: flex; flex-direction: column; line-height: 1.25; }
+.account-name { font-size: var(--fs-xs); font-weight: 700;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-handle { font-size: var(--fs-xs); color: var(--muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-more { color: var(--muted); flex-shrink: 0; }
+
+/* bottom:100%는 계정 블록 바로 위 — 폰트 스케일이 바뀌어도 겹치지 않는다.
+   실제 X처럼 사이드바 폭보다 넓게 오른쪽으로 넘긴다 (좁으면 문구가 줄바꿈된다) */
+.account-menu { position: absolute; left: 0; right: auto; min-width: 15rem;
+  bottom: 100%; margin-bottom: 6px;
+  z-index: 23; padding: 6px 0; background: var(--bg); border-radius: 14px;
+  box-shadow: 0 0 12px rgba(15, 20, 25, 0.18), 0 0 4px rgba(15, 20, 25, 0.08); }
+.menu-item { display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 11px 15px; background: none; border: none; cursor: pointer;
+  font-family: inherit; font-size: var(--fs-xs); font-weight: 700;
+  color: var(--text); text-align: left; white-space: nowrap; }
+.menu-item:hover { background: var(--hover); }
 
 /* ── 본문 ────────────────────────────────────── */
 .main { flex: 1; border-right: 1px solid var(--border); min-width: 0; }
@@ -204,13 +227,17 @@ body { background: var(--bg); color: var(--text); font-size: var(--fs-sm);
     padding: 2px 4px; background: var(--bg);
     border-right: none; border-top: 1px solid var(--border); }
   .logo { display: none; }
-  .nav-btn, .new-game { flex: 1; justify-content: center; border-radius: 12px; }
-  .nav-btn { padding: 11px 0; }
-  .nav-btn .label, .new-game .label { display: none; }
+  .nav-btn, .account-block { flex: 1; }
+  .nav-btn { justify-content: center; border-radius: 12px; padding: 11px 0; }
+  .nav-btn .label, .account .label { display: none; }
   .nav-btn.active { color: var(--accent); }
   /* 라벨이 없으니 뱃지를 아이콘 위로 올린다 */
   .badge { position: absolute; top: 3px; left: 50%; margin-left: 1px; }
-  .new-game { margin-top: 0; padding: 11px 0; border: none; }
+  /* 계정 블록은 독바에서 아바타만 남는다 */
+  .account-block { margin-top: 0; }
+  .account { justify-content: center; border-radius: 12px; padding: 11px 0; gap: 0; }
+  /* 독바의 마지막 칸이라 좁다 — 오른쪽에 붙이고 왼쪽으로 펼친다 */
+  .account-menu { left: auto; right: 0; min-width: 15rem; }
 
   /* 팝업은 화면 폭을 거의 다 쓴다 (데스크톱의 max-width 상한을 푼다) */
   .overlay { padding: 14px; align-items: flex-end; }

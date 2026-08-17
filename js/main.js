@@ -52,18 +52,29 @@
     resolveTurn(pendingAction, false);
   };
 
+  function closePopovers() { UI.closeStats(); UI.closeAccountMenu(); }
+
   document.querySelectorAll(".nav-btn[data-view]").forEach(function (btn) {
-    btn.onclick = function () { UI.switchView(btn.dataset.view); UI.closeStats(); };
+    btn.onclick = function () { UI.switchView(btn.dataset.view); closePopovers(); };
   });
 
+  // 두 팝오버는 배타적 — 하나를 열면 다른 하나는 닫는다
   document.getElementById("stats-toggle").onclick = function (e) {
     e.stopPropagation();
+    UI.closeAccountMenu();
     UI.toggleStats();
+  };
+
+  document.getElementById("account").onclick = function (e) {
+    e.stopPropagation();
+    UI.closeStats();
+    UI.toggleAccountMenu();
   };
 
   // 팝오버 밖을 누르면 닫는다 (토글 버튼 자신은 위에서 stopPropagation)
   document.addEventListener("click", function (e) {
     if (!e.target.closest(".stats-strip")) UI.closeStats();
+    if (!e.target.closest(".account-menu")) UI.closeAccountMenu();
   });
 
   document.querySelectorAll(".tab-btn").forEach(function (btn) {
@@ -74,8 +85,10 @@
     localStorage.removeItem(SAVE_KEY);
     location.reload();
   }
-  document.getElementById("new-game").onclick = function () {
-    if (confirm("저장된 게임을 지우고 새로 시작할까요?")) newGame();
+  // 로그아웃 = 이 계정의 기록을 버리고 새 계정으로 시작. 되돌릴 수 없으므로 확인을 받는다
+  document.getElementById("logout").onclick = function () {
+    UI.closeAccountMenu();
+    if (confirm("로그아웃하면 이 계정의 기록이 모두 사라지고 새 계정으로 시작합니다.\n계속할까요?")) newGame();
   };
 
   var st = game.getState();

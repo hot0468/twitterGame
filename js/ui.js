@@ -223,6 +223,19 @@ var UI = (function () {
 
   function closeStats() { setStatsOpen(false); }
 
+  // 계정 블록의 로그아웃 팝오버
+  function setAccountMenuOpen(open) {
+    $("account-menu").classList.toggle("hidden", !open);
+    $("account").setAttribute("aria-expanded", String(open));
+    $("account").classList.toggle("active", open);
+  }
+
+  function toggleAccountMenu() {
+    setAccountMenuOpen($("account-menu").classList.contains("hidden"));
+  }
+
+  function closeAccountMenu() { setAccountMenuOpen(false); }
+
   function showEnding(ending, onNewGame) {
     var ov = $("ending-overlay");
     ov.innerHTML = '<div class="card"><div class="trophy">' + Icons.svg("trophy") +
@@ -247,6 +260,7 @@ var UI = (function () {
     openTweetPrompt: openTweetPrompt, closeTweetPrompt: closeTweetPrompt,
     showDayTransition: showDayTransition, dateLabel: dateLabel,
     showEnding: showEnding, switchView: switchView,
-    setProfileTab: setProfileTab, toggleStats: toggleStats, closeStats: closeStats };
+    setProfileTab: setProfileTab, toggleStats: toggleStats, closeStats: closeStats,
+    toggleAccountMenu: toggleAccountMenu, closeAccountMenu: closeAccountMenu };
 })();
 if (typeof module !== "undefined") module.exports = UI;
