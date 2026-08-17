@@ -15,9 +15,11 @@
 
 ## UI 규칙 (불변)
 
-- **이모지 금지.** 아이콘이 필요하면 lucide(https://unpkg.com/lucide-static@1.31.0/icons/<name>.svg)에서 받아 `js/icons.js`의 PATHS에 추가하고 `Icons.svg()`로 쓴다.
+- **이모지 금지.** 아이콘이 필요하면 lucide(https://unpkg.com/lucide-static@1.31.0/icons/<name>.svg)에서 받아 `js/icons.js`의 PATHS에 추가하고 `Icons.svg(name)`로 쓴다.
 - **라이트 테마 단일.** 흰 배경이 기본이고 다크모드 대응은 하지 않는다. 색은 `css/style.css`의 `:root` 변수로만.
-- 14px 같은 작은 크기에 쓸 아이콘은 path 2~3개짜리 단순한 것만 고른다(복잡한 건 뭉개짐).
+- **크기는 전부 rem.** `css/style.css` 첫 줄 `html { font-size: 70% }`가 UI 전체 스케일 노브다 — 크기 조절 요청은 이 값 하나만 바꾼다. 개별 px font-size를 새로 넣지 말 것.
+- **아이콘 크기도 CSS가 정한다** (`.icon { width: 1.35em }` + 필요한 곳만 rem 오버라이드). `Icons.svg()`에 크기 인자는 없다.
+- 작은 크기(13px 내외)에 쓸 아이콘은 path 2~3개짜리 단순한 것만 고른다(brain·dumbbell처럼 복잡한 건 뭉개짐).
 - 스탯 패널은 사이드바 하단(새 게임 버튼 위)에 상주. 프로필 화면은 실제 X 구조(배너→겹친 아바타→소개→탭)만 담는다.
 - 프로필 탭은 실제 데이터가 있는 것만 만든다(현재 게시물·답글 2개). 빈 탭·죽은 버튼을 모양 때문에 추가하지 말 것.
 

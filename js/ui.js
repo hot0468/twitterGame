@@ -1,6 +1,16 @@
 var UI = (function () {
   function $(id) { return document.getElementById(id); }
 
+  // 스탯별 아이콘·색조. 프레젠테이션 전용 — 엔진은 스탯 이름만 안다.
+  // 논란성만 위험색(hot)인 건 의도: 성장 가속 페달이자 리스크라는 걸 색으로 알린다.
+  var STAT_STYLE = {
+    "글빨": { icon: "feather", tone: "ink" },
+    "유머": { icon: "laugh", tone: "warm" },
+    "감각": { icon: "trending-up", tone: "violet" },
+    "멘탈": { icon: "battery-medium", tone: "calm" },
+    "논란성": { icon: "flame", tone: "hot" }
+  };
+
   function avatarIcon(item) {
     if (item.author === "me") return "circle-user";
     if (item.kind === "event") return "globe";
@@ -14,11 +24,11 @@ var UI = (function () {
     var who = item.author === "me" ? "나" : (item.name || item.author);
     var handle = item.author === "me" ? "@me" : item.author;
     var metrics = item.kind === "me"
-      ? '<span class="metric">' + Icons.svg("heart", 15) + (item.likes || 0) + "</span>" +
-        '<span class="metric">' + Icons.svg("repeat-2", 15) + (item.rts || 0) + "</span>"
+      ? '<span class="metric">' + Icons.svg("heart") + (item.likes || 0) + "</span>" +
+        '<span class="metric">' + Icons.svg("repeat-2") + (item.rts || 0) + "</span>"
       : "";
     div.innerHTML =
-      '<div class="avatar">' + Icons.svg(avatarIcon(item), 24) + "</div>" +
+      '<div class="avatar">' + Icons.svg(avatarIcon(item)) + "</div>" +
       '<div class="body"><span class="who"></span> <span class="handle"></span>' +
       '<div class="text"></div><div class="meta"><span>' + item.day + "일차</span>" + metrics + "</div></div>";
     div.querySelector(".who").textContent = who;
@@ -68,10 +78,12 @@ var UI = (function () {
     var stats = $("stats-panel");
     stats.innerHTML = "";
     Object.keys(state.stats).forEach(function (k) {
+      var style = STAT_STYLE[k] || { icon: "trending-up", tone: "ink" };
       var row = document.createElement("div");
-      row.className = "stat-row";
-      row.innerHTML = "<span></span><b></b>";
-      row.querySelector("span").textContent = k;
+      row.className = "stat-row tone-" + style.tone;
+      row.innerHTML = '<span class="stat-name">' + Icons.svg(style.icon) +
+        "<span></span></span><b></b>";
+      row.querySelector(".stat-name span").textContent = k;
       row.querySelector("b").textContent = state.stats[k];
       stats.appendChild(row);
     });
@@ -91,7 +103,7 @@ var UI = (function () {
       item.className = "action-item" + (a.kind === "event" ? " event" : "");
       var kindIcon = a.kind === "event" ? "zap" : a.kind === "tweet" ? "pen-line" : "book-open";
       var kindText = a.kind === "event" ? "이벤트 대응" : a.kind === "tweet" ? "트윗" : "자기계발";
-      item.innerHTML = '<span class="label"></span><span class="kind">' + Icons.svg(kindIcon, 14) + kindText + "</span>";
+      item.innerHTML = '<span class="label"></span><span class="kind">' + Icons.svg(kindIcon) + kindText + "</span>";
       item.querySelector(".label").textContent = a.label;
       item.onclick = function () { onPick(a.id); };
       list.appendChild(item);
@@ -109,7 +121,7 @@ var UI = (function () {
 
   function showEnding(ending, onNewGame) {
     var ov = $("ending-overlay");
-    ov.innerHTML = '<div class="card"><div class="trophy">' + Icons.svg("trophy", 44) +
+    ov.innerHTML = '<div class="card"><div class="trophy">' + Icons.svg("trophy") +
       "</div><h1></h1><p></p><button>새 게임</button></div>";
     ov.querySelector("h1").textContent = ending.title;
     ov.querySelector("p").textContent = ending.text;

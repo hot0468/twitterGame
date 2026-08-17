@@ -18,13 +18,19 @@ var Icons = (function () {
     zap: '<path d="M15.914 4a1.5 1.5 0 0 0-2.474-1.561l-9 9A1.5 1.5 0 0 0 5.5 14h4.002a.5.5 0 0 1 .471.666L8.086 20a1.5 1.5 0 0 0 2.475 1.56l9-9A1.5 1.5 0 0 0 18.5 10h-3.997a.5.5 0 0 1-.472-.667z"/>',
     "pen-line": '<path d="M13 21h8"/><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/>',
     calendar: '<path d="M8 2v3"/><path d="M16 2v3"/><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/>',
-    // 작은 크기(14px)에서 형태가 살아남는 아이콘만 쓴다 — dumbbell 등 path가 많은 건 뭉개진다
-    "book-open": '<path d="M12 5v16"/><path d="M20.001 19A2 2 0 0 0 22 17V5a2 2 0 0 0-1.999-2L16 3.002A5 5 0 0 0 12 5a5 5 0 0 0-4-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 1.999 2H8a5 5 0 0 1 4 2 5 5 0 0 1 4-2z"/>'
+    // 작은 크기(13px 내외)에서 형태가 살아남는 아이콘만 쓴다 — brain/dumbbell처럼 path가 많은 건 뭉개진다
+    "book-open": '<path d="M12 5v16"/><path d="M20.001 19A2 2 0 0 0 22 17V5a2 2 0 0 0-1.999-2L16 3.002A5 5 0 0 0 12 5a5 5 0 0 0-4-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 1.999 2H8a5 5 0 0 1 4 2 5 5 0 0 1 4-2z"/>',
+    // 스탯용
+    feather: '<path d="M14.086 18.412A2 2 0 0 1 12.67 19H5v-7.672a2 2 0 0 1 .586-1.414L11.75 3.75a6 6 0 1 1 8.49 8.49z"/><path d="M16 8 2 22"/><path d="M17.488 15H9"/>',
+    laugh: '<path d="M15 10V9"/><path d="M7.084 14.302a5.12 5.12 0 0 0 9.833 0 .24.24 0 0 0-.235-.302H7.32a.24.24 0 0 0-.235.302"/><path d="M9 10V9"/><circle cx="12" cy="12" r="10"/>',
+    "trending-up": '<path d="M16 7h6v6"/><path d="m22 7-8.5 8.5-5-5L2 17"/>',
+    "battery-medium": '<path d="M10 14v-4"/><path d="M22 14v-4"/><path d="M6 14v-4"/><rect x="2" y="6" width="16" height="12" rx="2"/>',
+    flame: '<path d="M12 3q1 4 4 6.5t3 5.5a1 1 0 0 1-14 0 5 5 0 0 1 1-3 1 1 0 0 0 5 0c0-2-1.5-3-1.5-5q0-2 2.5-4"/>'
   };
 
-  function svg(name, size) {
-    var s = size || 22;
-    return '<svg class="icon" width="' + s + '" height="' + s + '" viewBox="0 0 24 24" fill="none" ' +
+  // 크기는 CSS가 정한다 (.icon { width: ?em }) — width/height 속성은 CSS 미적용 시 폴백일 뿐.
+  function svg(name) {
+    return '<svg class="icon" width="24" height="24" viewBox="0 0 24 24" fill="none" ' +
       'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
       (PATHS[name] || "") + "</svg>";
   }
@@ -32,7 +38,7 @@ var Icons = (function () {
   // data-icon 속성이 붙은 요소를 전부 실제 SVG로 채운다 (index.html의 정적 아이콘용)
   function mount(root) {
     (root || document).querySelectorAll("[data-icon]").forEach(function (el) {
-      el.innerHTML = svg(el.dataset.icon, el.dataset.iconSize);
+      el.innerHTML = svg(el.dataset.icon);
     });
   }
 
