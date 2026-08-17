@@ -62,12 +62,15 @@
     resolveTurn(pendingAction, false);
   };
 
+  var focusSearch = false;
   function closePopovers() { UI.closeStats(); UI.closeAccountMenu(); }
 
   document.querySelectorAll(".nav-btn[data-view]").forEach(function (btn) {
     btn.onclick = function () {
       // 프로필 탭은 항상 내 프로필로 — 남의 프로필을 보다 눌렀을 때 그 계정이 남으면 안 된다
       if (btn.dataset.view === "profile") UI.openProfile(null);
+      // 검색은 입력창에 포커스까지 줘야 바로 타이핑할 수 있다 (모바일의 유일한 입구)
+      else if (btn.dataset.view === "search") { UI.openSearch(); focusSearch = true; }
       else UI.switchView(btn.dataset.view);
       closePopovers();
       // 알림을 열면 읽은 것으로 처리한다 — 뱃지가 사라지고 그 상태가 저장돼야 한다
@@ -76,6 +79,8 @@
         save(game.getState());
       }
       refresh();
+      // 렌더가 끝난 뒤에 포커스를 준다 (숨어 있던 뷰는 focus를 못 받는다)
+      if (focusSearch) { focusSearch = false; searchInput.focus(); }
     };
   });
 
@@ -119,8 +124,26 @@
   document.getElementById("profile-back").onclick = function () { UI.closeProfile(); };
   document.getElementById("rail-more").onclick = function () { UI.toggleRailMore(); refresh(); };
 
-  document.querySelectorAll(".tab-btn").forEach(function (btn) {
+  // 프로필 탭만 — 검색 탭은 같은 .tab-btn 모양이지만 다른 핸들러를 쓴다
+  document.querySelectorAll(".profile-tabs .tab-btn[data-tab]").forEach(function (btn) {
     btn.onclick = function () { UI.setProfileTab(btn.dataset.tab); refresh(); };
+  });
+
+  // ── 검색 ──
+  var searchInput = document.getElementById("search-input");
+
+  function gotoSearch() {
+    UI.openSearch();
+    refresh();
+    searchInput.focus();
+  }
+
+  document.getElementById("rail-search").onclick = gotoSearch;
+  document.getElementById("search-back").onclick = function () { UI.closeSearch(); refresh(); };
+  // 입력할 때마다 바로 걸러준다. refresh()가 입력창 값을 건드리지 않으므로 포커스가 유지된다
+  searchInput.oninput = function () { UI.setSearchQuery(searchInput.value); refresh(); };
+  document.querySelectorAll(".search-tab").forEach(function (btn) {
+    btn.onclick = function () { UI.setSearchTab(btn.dataset.stab); refresh(); };
   });
 
   function newGame() {

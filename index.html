@@ -11,6 +11,8 @@
     <nav class="sidebar">
       <div class="logo" data-icon="bird"></div>
       <button class="nav-btn active" data-view="home"><span data-icon="house"></span><span class="label">홈</span></button>
+      <!-- 검색은 사이드바에도 둔다 — 모바일에선 우측 레일이 숨으므로 이게 유일한 입구다 -->
+      <button class="nav-btn" data-view="search"><span data-icon="search"></span><span class="label">검색</span></button>
       <!-- 뱃지는 아이콘 우측 상단에 붙는다. [data-icon] 안에 넣으면 Icons.mount()가 innerHTML로 덮어쓴다 -->
       <button class="nav-btn" data-view="notif"><span class="nav-icon"><span data-icon="bell"></span><span id="notif-badge" class="badge hidden"></span></span><span class="label">알림</span></button>
       <button class="nav-btn" data-view="profile"><span data-icon="user"></span><span class="label">프로필</span></button>
@@ -90,6 +92,23 @@
         <div id="notif-list" class="feed"></div>
       </section>
 
+      <!-- 검색: 입력창은 여기 하나만 둔다. 레일의 검색 상자는 이 화면으로 보내는 버튼이다
+           (입력창을 두 개 두면 값을 서로 맞춰줘야 한다) -->
+      <section id="view-search" class="view hidden">
+        <div class="detail-head">
+          <button id="search-back" class="icon-btn" data-icon="arrow-left" aria-label="뒤로"></button>
+          <label class="search-field">
+            <span data-icon="search"></span>
+            <input id="search-input" type="search" placeholder="트윗과 계정 검색" autocomplete="off">
+          </label>
+        </div>
+        <div class="profile-tabs">
+          <button class="tab-btn search-tab active" data-stab="tweets">트윗</button>
+          <button class="tab-btn search-tab" data-stab="accounts">계정</button>
+        </div>
+        <div id="search-results" class="feed"></div>
+      </section>
+
       <!-- 트윗 상세: 원본 트윗 + 거기 달린 답글. 홈 타임라인에는 답글이 안 뜬다 -->
       <section id="view-tweet" class="view hidden">
         <div class="detail-head">
@@ -104,6 +123,10 @@
     <!-- 실제 X의 우측 영역. 본문 폭을 줄여 트윗 줄이 짧아지고, 계정을 눌러 프로필로 갈 수 있다.
          데이터가 있는 것만 담는다 — 검색은 붙일 백엔드가 없어서 넣지 않았다. -->
     <aside class="rail">
+      <!-- 실제 입력은 검색 화면에 있다 — 이건 눌러서 그 화면으로 가는 버튼이다 -->
+      <button id="rail-search" class="rail-search">
+        <span data-icon="search"></span><span id="rail-search-text">검색</span>
+      </button>
       <section class="rail-box">
         <h2>팔로우 중인 계정</h2>
         <div id="rail-accounts"></div>

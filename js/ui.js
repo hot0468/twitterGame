@@ -247,11 +247,8 @@ var UI = (function () {
     var main = $("tweet-detail-main");
     main.innerHTML = "";
     // 보관함까지 뒤진다 — 남의 트윗은 내 피드에 흘러온 것만 feed에 있고,
-    // 프로필에서 누른 트윗은 보관함에만 있을 수 있다.
-    var pool = state.tweetLog.concat(state.feed);
-    var boxes = state.npcTweets || {};
-    Object.keys(boxes).forEach(function (h) { pool = pool.concat(boxes[h]); });
-    var tweet = pool.filter(function (t) { return t.id === detailTweetId; })[0];
+    // 프로필·검색에서 누른 트윗은 보관함에만 있을 수 있다.
+    var tweet = allTweets(state).filter(function (t) { return t.id === detailTweetId; })[0];
     if (!tweet) {
       renderFeed(main, [], "게시물을 찾을 수 없습니다.");
       renderFeed($("tweet-detail-replies"), [], "");
@@ -262,6 +259,96 @@ var UI = (function () {
       return f.kind === "reply" && f.replyTo === detailTweetId;
     });
     renderFeed($("tweet-detail-replies"), replies, "아직 답글이 없습니다.");
+  }
+
+  // 내 트윗 + 모든 계정의 보관함 + 피드의 답글을 한 묶음으로. id로 중복을 없앤다
+  // (보관함 항목은 피드에도 있다). 트윗 상세 조회와 검색이 같은 묶음을 쓴다.
+  function allTweets(state) {
+    var seen = {}, out = [];
+    function add(list) {
+      (list || []).forEach(function (t) {
+        if (!t || !t.text) return;
+        var key = t.id || t.author + "|" + t.day + "|" + t.text;
+        if (seen[key]) return;
+        seen[key] = true;
+        out.push(t);
+      });
+    }
+    add(state.tweetLog);
+    var boxes = state.npcTweets || {};
+    Object.keys(boxes).forEach(function (h) { add(boxes[h]); });
+    add(state.feed.filter(function (f) {
+      return f.kind === "me" || f.kind === "npc" || f.kind === "reply";
+    }));
+    return out;
+  }
+
+  // 계정 한 줄. 레일 목록과 검색 결과가 같은 모양을 쓴다.
+  // data-account를 달면 기존 클릭 위임이 프로필로 보낸다.
+  function accountRow(npc) {
+    var row = document.createElement("div");
+    row.className = "rail-account";
+    row.dataset.account = npc.handle;
+    row.innerHTML = '<div class="avatar small">' + pfp(npc.handle) + "</div>" +
+      '<div class="rail-id"><b></b><span></span></div><span class="rail-count"></span>';
+    row.querySelector("b").textContent = npc.name;
+    row.querySelector(".rail-id span").textContent = npc.handle;
+    row.querySelector(".rail-count").textContent = (npc.followers || 0).toLocaleString();
+    return row;
+  }
+
+  // ── 검색 ───────────────────────────────────────
+  var searchQuery = "";
+  var searchTab = "tweets";
+  var searchReturnView = "home";
+
+  function openSearch() {
+    if (currentView !== "search") searchReturnView = currentView;
+    switchView("search");
+  }
+
+  function closeSearch() { switchView(searchReturnView); }
+
+  function setSearchQuery(q) { searchQuery = q; }
+  function setSearchTab(t) {
+    searchTab = t;
+    document.querySelectorAll(".search-tab").forEach(function (b) {
+      b.classList.toggle("active", b.dataset.stab === t);
+    });
+  }
+
+  function renderSearch(state) {
+    var q = searchQuery.trim().toLowerCase();
+    // 레일 버튼에도 현재 검색어를 보여준다 (입력창은 검색 화면에만 있으므로)
+    $("rail-search-text").textContent = searchQuery.trim() || "검색";
+
+    var box = $("search-results");
+    if (!q) {
+      renderFeed(box, [], "트윗 내용이나 계정 이름으로 검색해보세요.");
+      return;
+    }
+    if (searchTab === "tweets") {
+      var hits = allTweets(state).filter(function (t) {
+        return t.text.toLowerCase().indexOf(q) !== -1;
+      }).sort(function (a, b) { return b.day - a.day; });
+      renderFeed(box, hits, "일치하는 트윗이 없습니다.");
+      return;
+    }
+    // 계정 탭: 이미 만난 계정만 — 못 만난 계정은 프로필에 트윗이 하나도 없다
+    var npcs = ((typeof GAME_DATA !== "undefined" && GAME_DATA.npcs) || [])
+      .filter(function (n) { return state.npcSeen && state.npcSeen[n.handle] != null; })
+      .filter(function (n) {
+        return (n.name + " " + n.handle + " " + (n.bio || "")).toLowerCase().indexOf(q) !== -1;
+      })
+      .sort(function (a, b) { return (b.followers || 0) - (a.followers || 0); });
+
+    box.innerHTML = "";
+    // 내 계정도 검색된다
+    if (("나 @me " + ME.bio).toLowerCase().indexOf(q) !== -1) {
+      box.appendChild(accountRow({ handle: "@me", name: ME.name, followers: state.followers }));
+    }
+    npcs.forEach(function (n) { box.appendChild(accountRow(n)); });
+    if (!box.children.length) renderFeed(box, [], "일치하는 계정이 없습니다.");
   }
 
   // ── 우측 레일 ──────────────────────────────────
@@ -287,15 +374,7 @@ var UI = (function () {
       box.appendChild(none);
     }
     (railExpanded ? list : list.slice(0, RAIL_LIMIT)).forEach(function (n) {
-      var row = document.createElement("div");
-      row.className = "rail-account";
-      row.dataset.account = n.handle; // main.js의 클릭 위임이 프로필로 보낸다
-      row.innerHTML = '<div class="avatar small">' + pfp(n.handle) + "</div>" +
-        '<div class="rail-id"><b></b><span></span></div><span class="rail-count"></span>';
-      row.querySelector("b").textContent = n.name;
-      row.querySelector(".rail-id span").textContent = n.handle;
-      row.querySelector(".rail-count").textContent = (n.followers || 0).toLocaleString();
-      box.appendChild(row);
+      box.appendChild(accountRow(n));
     });
     var more = $("rail-more");
     more.classList.toggle("hidden", list.length <= RAIL_LIMIT);
@@ -423,6 +502,7 @@ var UI = (function () {
     renderTweetDetail(state);
     renderRailAccounts(state);
     renderRailTrends(state);
+    renderSearch(state);
     // 마운트 지점이 둘(데스크톱=사이드바, 모바일=상단 스트립) — CSS가 하나만 보여준다
     document.querySelectorAll("[data-stats]").forEach(function (panel) {
       panel.innerHTML = "";
@@ -552,7 +632,7 @@ var UI = (function () {
 
   function switchView(name) {
     currentView = name;
-    ["home", "profile", "notif", "tweet"].forEach(function (v) {
+    ["home", "profile", "notif", "tweet", "search"].forEach(function (v) {
       document.getElementById("view-" + v).classList.toggle("hidden", v !== name);
     });
     // [data-view]로 한정 — 스탯 토글도 .nav-btn이지만 뷰가 없어서 여기 끼면 active가 꼬인다
@@ -571,6 +651,8 @@ var UI = (function () {
     toggleAccountMenu: toggleAccountMenu, closeAccountMenu: closeAccountMenu,
     openTweetDetail: openTweetDetail, closeTweetDetail: closeTweetDetail,
     openProfile: openProfile, closeProfile: closeProfile,
-    toggleRailMore: toggleRailMore };
+    toggleRailMore: toggleRailMore,
+    openSearch: openSearch, closeSearch: closeSearch,
+    setSearchQuery: setSearchQuery, setSearchTab: setSearchTab };
 })();
 if (typeof module !== "undefined") module.exports = UI;
