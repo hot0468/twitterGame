@@ -42,7 +42,7 @@ function loadData() {
   Object.assign(d, require("../data/actions.js"));
   Object.assign(d, require("../data/npcs.js"));
   Object.assign(d, require("../data/events.js"));
-  d.endings = d.endings || { threshold: 10000, list: [] };
+  Object.assign(d, require("../data/endings.js"));
   return d;
 }
 var g = Engine.create(loadData());
@@ -135,5 +135,35 @@ assert.deepStrictEqual(r5.triggeredEvents, [], "chance 넘음 → 발동 안 함
 
 console.log("Task 4 OK");
 
+// --- Task 5: endings + mental ---
+var g10 = Engine.create(loadData(), null, function () { return 0.99; }); // 이벤트 미발동
+g10.getState().followers = 9999;
+g10.getState().stats.글빨 = 30;
+var r6 = g10.advanceTurn("tweet_info"); // 글빨*4 = 120 증가 → 임계값 돌파
+assert.ok(r6.ending, "임계값 도달 시 엔딩");
+assert.strictEqual(r6.ending.id, "author", "글빨 최고 → 등단 작가");
+assert.strictEqual(g10.getState().ending, "author");
 
+var g11 = Engine.create(loadData(), null, function () { return 0.99; });
+g11.getState().followers = 99999;
+g11.getState().stats.논란성 = 50;
+g11.getState().stats.유머 = 40;
+var r7 = g11.advanceTurn("train_meme");
+assert.strictEqual(r7.ending.id, "cyber_wrecker", "논란성 조건이 topStat보다 우선(list 순서)");
+
+var g12 = Engine.create(loadData(), null, function () { return 0.99; });
+g12.getState().followers = 99999;
+var r8 = g12.advanceTurn("rest");
+assert.ok(r8.ending, "조건 미달이어도 기본 엔딩은 반드시 나옴");
+
+var g13 = Engine.create(loadData(), null, function () { return 0.99; });
+g13.getState().stats.멘탈 = 5;
+g13.getState().stats.감각 = 10;
+var dayBefore = g13.getState().day;
+var r9 = g13.advanceTurn("tweet_bait"); // 멘탈 -5 → 0 → 붕괴
+assert.strictEqual(g13.getState().stats.멘탈, 20, "강제 휴식으로 멘탈 20 회복");
+assert.strictEqual(g13.getState().day, dayBefore + 2, "턴 손실 (+1 추가)");
+assert.ok(r9.feedItems.some(function (f) { return f.kind === "system"; }), "붕괴 안내 피드");
+
+console.log("Task 5 OK");
 

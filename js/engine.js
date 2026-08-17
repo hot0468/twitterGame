@@ -138,9 +138,22 @@
         }
       });
 
+      if (state.stats.멘탈 === 0) {
+        state.stats.멘탈 = 20;
+        state.day += 1;
+        feedItems.push({ author: "@world", name: "시스템", text: "멘탈이 무너졌다… 하루를 통째로 쉬며 회복했다. (멘탈 20)", day: state.day, kind: "system" });
+      }
+
+      var ending = null;
+      if (!state.ending && state.followers >= data.endings.threshold) {
+        var hit = data.endings.list.filter(function (e) { return !e.condition || checkCond(e.condition, state); })[0];
+        state.ending = hit.id;
+        ending = { id: hit.id, title: hit.title, text: hit.text };
+      }
+
       state.feed = feedItems.concat(state.feed);
       state.day += 1;
-      return { feedItems: feedItems, statChanges: statChanges, triggeredEvents: triggeredEvents, ending: null };
+      return { feedItems: feedItems, statChanges: statChanges, triggeredEvents: triggeredEvents, ending: ending };
     }
     return { getState: function () { return state; }, getActions: getActions, advanceTurn: advanceTurn };
   }
