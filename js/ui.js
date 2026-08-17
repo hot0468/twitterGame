@@ -1,16 +1,26 @@
 var UI = (function () {
   function $(id) { return document.getElementById(id); }
 
+  function avatarIcon(item) {
+    if (item.author === "me") return "circle-user";
+    if (item.kind === "event") return "globe";
+    if (item.kind === "system") return "triangle-alert";
+    return "message-circle";
+  }
+
   function tweetEl(item) {
     var div = document.createElement("div");
     div.className = "tweet " + item.kind;
     var who = item.author === "me" ? "나" : (item.name || item.author);
     var handle = item.author === "me" ? "@me" : item.author;
-    var meta = item.kind === "me" ? "  ♥ " + (item.likes || 0) + "  🔁 " + (item.rts || 0) : "";
+    var metrics = item.kind === "me"
+      ? '<span class="metric">' + Icons.svg("heart", 15) + (item.likes || 0) + "</span>" +
+        '<span class="metric">' + Icons.svg("repeat-2", 15) + (item.rts || 0) + "</span>"
+      : "";
     div.innerHTML =
-      '<div class="avatar">' + (item.author === "me" ? "😎" : item.kind === "event" ? "🌐" : item.kind === "system" ? "⚠️" : "🐤") + "</div>" +
+      '<div class="avatar">' + Icons.svg(avatarIcon(item), 24) + "</div>" +
       '<div class="body"><span class="who"></span> <span class="handle"></span>' +
-      '<div class="text"></div><span class="meta">' + item.day + "일차" + meta + "</span></div>";
+      '<div class="text"></div><div class="meta"><span>' + item.day + "일차</span>" + metrics + "</div></div>";
     div.querySelector(".who").textContent = who;
     div.querySelector(".handle").textContent = handle;
     div.querySelector(".text").textContent = item.text;
@@ -51,8 +61,9 @@ var UI = (function () {
     actions.forEach(function (a) {
       var item = document.createElement("div");
       item.className = "action-item" + (a.kind === "event" ? " event" : "");
-      var kindLabel = a.kind === "event" ? "⚡ 이벤트 대응" : a.kind === "tweet" ? "트윗" : "자기계발";
-      item.innerHTML = '<span class="label"></span><span class="kind">' + kindLabel + "</span>";
+      var kindIcon = a.kind === "event" ? "zap" : a.kind === "tweet" ? "pen-line" : "book-open";
+      var kindText = a.kind === "event" ? "이벤트 대응" : a.kind === "tweet" ? "트윗" : "자기계발";
+      item.innerHTML = '<span class="label"></span><span class="kind">' + Icons.svg(kindIcon, 14) + kindText + "</span>";
       item.querySelector(".label").textContent = a.label;
       item.onclick = function () { onPick(a.id); };
       list.appendChild(item);
@@ -70,8 +81,9 @@ var UI = (function () {
 
   function showEnding(ending, onNewGame) {
     var ov = $("ending-overlay");
-    ov.innerHTML = '<div class="card"><h1></h1><p></p><button>새 게임</button></div>';
-    ov.querySelector("h1").textContent = "🏆 " + ending.title;
+    ov.innerHTML = '<div class="card"><div class="trophy">' + Icons.svg("trophy", 44) +
+      "</div><h1></h1><p></p><button>새 게임</button></div>";
+    ov.querySelector("h1").textContent = ending.title;
     ov.querySelector("p").textContent = ending.text;
     ov.querySelector("button").onclick = onNewGame;
     ov.classList.remove("hidden");

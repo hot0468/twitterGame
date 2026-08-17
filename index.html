@@ -9,12 +9,12 @@
 <body>
   <div class="app">
     <nav class="sidebar">
-      <div class="logo">🐦</div>
-      <button class="nav-btn active" data-view="home">🏠 <span class="label">홈</span></button>
-      <button class="nav-btn" data-view="notif">🔔 <span class="label">알림</span> <span id="notif-badge" class="badge hidden"></span></button>
-      <button class="nav-btn" data-view="profile">👤 <span class="label">프로필</span></button>
-      <button id="next-day" class="next-day" disabled>➡️ <span class="label">다음 날</span></button>
-      <button id="new-game" class="new-game">새 게임</button>
+      <div class="logo" data-icon="bird" data-icon-size="30"></div>
+      <button class="nav-btn active" data-view="home"><span data-icon="house"></span><span class="label">홈</span></button>
+      <button class="nav-btn" data-view="notif"><span data-icon="bell"></span><span class="label">알림</span><span id="notif-badge" class="badge hidden"></span></button>
+      <button class="nav-btn" data-view="profile"><span data-icon="user"></span><span class="label">프로필</span></button>
+      <button id="next-day" class="next-day" disabled><span class="label">다음 날</span><span data-icon="arrow-right" data-icon-size="18"></span></button>
+      <button id="new-game" class="new-game"><span data-icon="rotate-ccw" data-icon-size="14"></span><span class="label">새 게임</span></button>
     </nav>
 
     <main class="main">
@@ -25,7 +25,7 @@
 
       <section id="view-home" class="view">
         <div id="compose" class="compose">
-          <div class="avatar">😎</div>
+          <div class="avatar" data-icon="circle-user" data-icon-size="26"></div>
           <div class="compose-hint">무슨 일이 일어나고 있나요?</div>
         </div>
         <div id="action-list" class="action-list hidden"></div>
@@ -34,7 +34,7 @@
 
       <section id="view-profile" class="view hidden">
         <div class="profile-header">
-          <div class="avatar big">😎</div>
+          <div class="avatar big" data-icon="circle-user" data-icon-size="40"></div>
           <h2>나</h2><span class="handle">@me</span>
         </div>
         <div id="profile-stats" class="profile-stats"></div>
@@ -55,6 +55,7 @@
   <script src="data/events.js"></script>
   <script src="data/endings.js"></script>
   <script src="js/engine.js"></script>
+  <script src="js/icons.js"></script>
   <script src="js/ui.js"></script>
   <script src="js/main.js"></script>
 </body>

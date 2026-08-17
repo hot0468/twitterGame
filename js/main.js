@@ -9,6 +9,8 @@
   }
   function save(state) { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); }
 
+  Icons.mount();
+
   var game = Engine.create(GAME_DATA, load());
   var turnDone = false;
 
