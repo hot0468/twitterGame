@@ -2,7 +2,10 @@
   var SAVE_KEY = "twitterGame.save";
 
   function load() {
-    try { return JSON.parse(localStorage.getItem(SAVE_KEY)); } catch (e) { return null; }
+    try {
+      var s = JSON.parse(localStorage.getItem(SAVE_KEY));
+      return s && s.stats ? s : null;
+    } catch (e) { return null; }
   }
   function save(state) { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); }
 

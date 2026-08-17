@@ -86,7 +86,7 @@
 
     function pushEventFeed(ev, stageIdx, feedItems) {
       ev.stages[stageIdx].feed.forEach(function (t) {
-        feedItems.push({ author: "@world", name: "이벤트", text: t, day: state.day, kind: "event" });
+        feedItems.push({ author: "@world", name: "타임라인", text: t, day: state.day, kind: "event" });
       });
     }
 
@@ -99,7 +99,7 @@
         var ae = state.activeEvents.filter(function (a) { return a.eventId === parts[1]; })[0];
         var choice = ev.stages[ae.stage].choices[Number(parts[2])];
         applyEffects(choice.effects, statChanges);
-        feedItems.push({ author: "me", text: choice.label + " 선택지를 고르셨다", day: state.day, likes: 0, rts: 0, kind: "me" });
+        feedItems.push({ author: "me", text: choice.label + " — 을(를) 선택했다", day: state.day, likes: 0, rts: 0, kind: "me" });
         if (choice.next === "end") {
           state.activeEvents = state.activeEvents.filter(function (a) { return a.eventId !== ev.id; });
           state.eventHistory.push(ev.id);
@@ -140,8 +140,8 @@
 
       if (state.stats.멘탈 === 0) {
         state.stats.멘탈 = 20;
-        state.day += 1;
         feedItems.push({ author: "@world", name: "시스템", text: "멘탈이 무너졌다… 하루를 통째로 쉬며 회복했다. (멘탈 20)", day: state.day, kind: "system" });
+        state.day += 1;
       }
 
       var ending = null;
