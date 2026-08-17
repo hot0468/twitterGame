@@ -42,7 +42,8 @@
   function initialState() {
     return {
       day: 1, followers: 10,
-      stats: { 글빨: 5, 유머: 5, 감각: 5, 멘탈: 50, 돈: 30, 논란성: 0 },
+      // 돈만 원 단위(정수 원). 표기는 ui.js가 천 단위 구분 + "원"을 붙인다.
+      stats: { 글빨: 5, 유머: 5, 감각: 5, 멘탈: 50, 돈: 300000, 논란성: 0 },
       feed: [], tweetLog: [], activeEvents: [], eventHistory: [], ending: null
     };
   }

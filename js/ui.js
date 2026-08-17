@@ -95,7 +95,7 @@ var UI = (function () {
         row.innerHTML = '<span class="stat-name">' + Icons.svg(style.icon) +
           "<span></span></span><b></b>";
         row.querySelector(".stat-name span").textContent = k;
-        row.querySelector("b").textContent = state.stats[k];
+        row.querySelector("b").textContent = statValue(k, state.stats[k]);
         panel.appendChild(row);
       });
     });
@@ -107,11 +107,16 @@ var UI = (function () {
     badge.classList.toggle("hidden", pending === 0);
   }
 
-  // { 글빨: 2, 팔로워: -5 } → "글빨 +2, 팔로워 -5"
+  // 돈만 원 단위로 표기한다 (엔진은 정수 원으로만 다룬다)
+  function statValue(name, v) {
+    return name === "돈" ? v.toLocaleString() + "원" : String(v);
+  }
+
+  // { 글빨: 2, 돈: -250000 } → "글빨 +2  돈 -250,000원"
   function effectsText(effects) {
     return Object.keys(effects || {}).map(function (k) {
       var v = effects[k];
-      return k + " " + (v >= 0 ? "+" : "") + v;
+      return k + " " + (v >= 0 ? "+" : "-") + statValue(k, Math.abs(v));
     }).join("  ");
   }
 

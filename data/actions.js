@@ -43,20 +43,20 @@ GAME_DATA.actions = [
     tweet: { category: "daily", effects: { "팔로워": 1 },
       templates: ["오늘은 폰 끄고 쉼. 내일 봐요", "잠을 12시간 잤다. 인간이 됐다"] } },
 
-  // ── 돈 관련 ──
+  // ── 돈 관련 (돈은 원 단위) ──
   // 알바로 벌고, 협찬으로 크게 벌고(논란성이 대가), 홍보로 팔로워를 직접 산다.
   { id: "parttime", label: "알바하기",
-    effects: { "돈": 8, "멘탈": -4 },
+    effects: { "돈": 80000, "멘탈": -4 },
     tweet: { category: "daily", effects: { "팔로워": "1 + 글빨" },
       templates: ["알바 끝. 다리가 내 다리가 아니다", "오늘 시급으로 산 커피가 제일 맛있었다"] } },
 
   { id: "sponsor", label: "협찬 검토", requires: { "팔로워": 500 },
     effects: {},
-    tweet: { category: "info", effects: { "돈": "12 + 팔로워/250", "논란성": 4 },
+    tweet: { category: "info", effects: { "돈": "120000 + 팔로워*40", "논란성": 4 },
       templates: ["[광고] 이거 진짜 좋아서 소개합니다 (내돈내산 아님)", "협찬 받았습니다. 그래도 솔직하게 써봄"] } },
 
-  { id: "promo", label: "홍보 돌리기", requires: { "돈": 25 },
-    effects: { "돈": -25, "팔로워": 250 },
+  { id: "promo", label: "홍보 돌리기", requires: { "돈": 250000 },
+    effects: { "돈": -250000, "팔로워": 250 },
     tweet: { category: "daily", effects: { "팔로워": "글빨*2" },
       templates: ["계정 홍보 좀 해봤습니다. 새로 오신 분들 반가워요", "유입 감사합니다. 앞으로 잘 부탁드립니다"] } }
 ];
