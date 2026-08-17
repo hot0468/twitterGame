@@ -75,17 +75,19 @@ var UI = (function () {
     $("followers").textContent = "팔로워 " + state.followers.toLocaleString();
     renderFeed($("feed"), state.feed, "타임라인이 조용합니다. 첫 트윗을 써보세요.");
     renderProfile(state);
-    var stats = $("stats-panel");
-    stats.innerHTML = "";
-    Object.keys(state.stats).forEach(function (k) {
-      var style = STAT_STYLE[k] || { icon: "trending-up", tone: "ink" };
-      var row = document.createElement("div");
-      row.className = "stat-row tone-" + style.tone;
-      row.innerHTML = '<span class="stat-name">' + Icons.svg(style.icon) +
-        "<span></span></span><b></b>";
-      row.querySelector(".stat-name span").textContent = k;
-      row.querySelector("b").textContent = state.stats[k];
-      stats.appendChild(row);
+    // 마운트 지점이 둘(데스크톱=사이드바, 모바일=상단 스트립) — CSS가 하나만 보여준다
+    document.querySelectorAll("[data-stats]").forEach(function (panel) {
+      panel.innerHTML = "";
+      Object.keys(state.stats).forEach(function (k) {
+        var style = STAT_STYLE[k] || { icon: "trending-up", tone: "ink" };
+        var row = document.createElement("div");
+        row.className = "stat-row tone-" + style.tone;
+        row.innerHTML = '<span class="stat-name">' + Icons.svg(style.icon) +
+          "<span></span></span><b></b>";
+        row.querySelector(".stat-name span").textContent = k;
+        row.querySelector("b").textContent = state.stats[k];
+        panel.appendChild(row);
+      });
     });
     var notifItems = state.feed.filter(function (f) { return f.kind === "event" || f.kind === "system" || f.kind === "reply"; });
     renderFeed($("notif-list"), notifItems, "아직 알림이 없습니다.");

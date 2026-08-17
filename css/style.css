@@ -36,8 +36,9 @@ body { background: var(--bg); color: var(--text); font-size: var(--fs-sm);
   display: flex; flex-direction: column; gap: 2px; position: sticky; top: 0; height: 100vh; }
 .logo { padding: 8px 11px; color: var(--text); }
 .logo .icon { width: 1.9rem; height: 1.9rem; }
-.nav-btn { display: flex; align-items: center; gap: 12px; background: none; border: none;
-  color: var(--text); font-family: inherit; font-size: var(--fs-base); text-align: left;
+.nav-btn { position: relative; display: flex; align-items: center; gap: 12px;
+  background: none; border: none; color: var(--text); font-family: inherit;
+  font-size: var(--fs-base); text-align: left;
   padding: 9px 12px; border-radius: 24px; cursor: pointer; }
 .nav-btn:hover { background: var(--hover); }
 .nav-btn.active { font-weight: 700; }
@@ -66,6 +67,9 @@ body { background: var(--bg); color: var(--text); font-size: var(--fs-sm);
 .stat-row.tone-violet .icon { color: #8b5cf6; }
 .stat-row.tone-calm .icon { color: #12a594; }
 .stat-row.tone-hot .icon { color: #e5484d; }
+
+/* 모바일용 스탯 스트립 — 기본은 숨김, 640px 이하에서만 쓴다 */
+.stats-strip { display: none; }
 
 .new-game { display: flex; align-items: center; justify-content: center; gap: 6px;
   margin-top: 9px; background: none; border: 1px solid #cfd9de; color: var(--muted);
@@ -151,12 +155,40 @@ body { background: var(--bg); color: var(--text); font-size: var(--fs-sm);
   font-size: var(--fs-base); }
 .overlay button:hover { background: var(--accent-dark); }
 
+/* ── 모바일 (실제 X 앱 구조: 하단 탭바 + 컴포즈 FAB + 전체폭 타임라인) ── */
 @media (max-width: 640px) {
-  /* 라벨은 접지만 스탯은 남긴다 — 스탯 확인이 게임의 핵심 정보라서 */
-  .sidebar { width: 7.8rem; padding: 10px 5px; }
-  .nav-btn, .next-day, .new-game { justify-content: center; padding: 10px 5px; }
+  .app { display: block; }
+  .main { border-right: none; padding-bottom: 4.6rem; } /* 하단 탭바 높이만큼 비움 */
+
+  /* 사이드바 → 화면 하단 고정 탭바.
+     top: auto 필수 — 데스크톱의 sticky top:0이 남으면 fixed 요소가 위아래로 늘어나 화면을 다 덮는다 */
+  .sidebar { position: fixed; top: auto; bottom: 0; left: 0; right: 0; z-index: 20;
+    width: auto; height: auto; flex-direction: row; align-items: stretch; gap: 0;
+    padding: 2px 4px; background: var(--bg);
+    border-right: none; border-top: 1px solid var(--border); }
+  .logo { display: none; }
+  .nav-btn, .new-game { flex: 1; justify-content: center; border-radius: 12px; }
+  .nav-btn { padding: 11px 0; }
   .nav-btn .label, .next-day .label, .new-game .label { display: none; }
-  .stats-panel { padding: 9px 0 7px; }
-  .stat-row { padding: 4px 5px; gap: 5px; }
+  .nav-btn.active { color: var(--accent); }
+  /* 라벨이 없으니 뱃지를 아이콘 위로 올린다 */
+  .badge { position: absolute; top: 3px; left: 50%; margin-left: 1px; }
+  .new-game { margin-top: 0; padding: 11px 0; border: none; }
+
+  /* 다음 날 → X의 파란 작성 버튼 자리(우하단 FAB) */
+  .next-day { position: fixed; right: 14px; bottom: 5.4rem; z-index: 21;
+    width: 4.2rem; height: 4.2rem; margin-top: 0; padding: 0; border-radius: 50%;
+    box-shadow: 0 4px 14px rgba(29, 155, 240, 0.45); }
+  .next-day .icon { width: 2rem; height: 2rem; }
+
+  /* 스탯 → 타임라인 위 칩 스트립 (하단 탭바로 옮긴 사이드바 자리를 대신함) */
+  .stats-panel { display: none; }
+  .stats-strip { display: flex; flex-wrap: wrap; gap: 5px; padding: 8px 10px;
+    border-bottom: 1px solid var(--border); }
+  .stats-strip .stat-row { flex: 0 0 auto; gap: 5px; padding: 4px 9px;
+    background: var(--hover); border: 1px solid var(--border); border-radius: 999px; }
+  .stats-strip .stat-name .icon { width: 1.2rem; height: 1.2rem; }
+
   .profile-banner { height: 8rem; }
+  .compose-hint { font-size: var(--fs-base); }
 }

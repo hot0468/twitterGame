@@ -14,7 +14,7 @@
       <button class="nav-btn" data-view="notif"><span data-icon="bell"></span><span class="label">알림</span><span id="notif-badge" class="badge hidden"></span></button>
       <button class="nav-btn" data-view="profile"><span data-icon="user"></span><span class="label">프로필</span></button>
       <button id="next-day" class="next-day" disabled><span class="label">다음 날</span><span data-icon="arrow-right"></span></button>
-      <div id="stats-panel" class="stats-panel"></div>
+      <div class="stats-panel" data-stats></div>
       <button id="new-game" class="new-game"><span data-icon="rotate-ccw"></span><span class="label">새 게임</span></button>
     </nav>
 
@@ -23,6 +23,9 @@
         <span id="day">1일차</span>
         <span id="followers">팔로워 10</span>
       </header>
+
+      <!-- 모바일용 스탯 스트립. 데스크톱에선 사이드바 쪽(.stats-panel)만 보인다 -->
+      <div class="stats-strip" data-stats></div>
 
       <section id="view-home" class="view">
         <div id="compose" class="compose">
