@@ -29,9 +29,11 @@ body { background: var(--bg); color: var(--text); font-size: var(--fs-sm);
 /* 아이콘 크기는 주변 글씨에 비례한다 — 개별 px 지정 없음 */
 .icon { display: block; flex-shrink: 0; width: 1.35em; height: 1.35em; }
 
-/* 사이드바 + 본문 + 우측 레일. 레일이 본문 폭을 줄여줘서 트윗 줄이 짧아진다
-   (레일 없이 900px이면 본문이 ~725px라 140자 트윗이 한 줄로 길게 늘어졌다) */
-.app { display: flex; max-width: 1080px; margin: 0 auto; min-height: 100vh; }
+/* 사이드바 13.5 + 본문 46 + 레일 21 = 80.5rem. 전부 rem이라 스케일 노브를 바꿔도 같이 움직인다.
+   본문 폭은 .main의 max-width가 정한다(레일이 숨는 좁은 창에서도 넓어지지 않게).
+   justify-content: center — 레일이 숨어 남는 공간이 생기면 열들을 가운데로 모은다. */
+.app { display: flex; justify-content: center;
+  max-width: 80.5rem; margin: 0 auto; min-height: 100vh; }
 
 /* ── 사이드바 ────────────────────────────────── */
 .sidebar { width: 13.5rem; padding: 10px 7px; border-right: 1px solid var(--border);
@@ -101,7 +103,8 @@ body { background: var(--bg); color: var(--text); font-size: var(--fs-sm);
 .menu-item:hover { background: var(--hover); }
 
 /* ── 본문 ────────────────────────────────────── */
-.main { flex: 1; border-right: 1px solid var(--border); min-width: 0; }
+/* 46rem ≈ 600px. 트윗 줄 길이를 정하는 값이라 여기만 고치면 된다 */
+.main { flex: 1; max-width: 46rem; border-right: 1px solid var(--border); min-width: 0; }
 .topbar { display: flex; justify-content: space-between; padding: 12px 14px;
   border-bottom: 1px solid var(--border); font-weight: 700; position: sticky; top: 0;
   background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(12px); z-index: 5; }
