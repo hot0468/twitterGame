@@ -52,6 +52,40 @@
     return key === "팔로워" && v > 0 ? Math.round(v * morale(against.stats.멘탈)) : v;
   }
 
+  function gcd(a, b) { return b ? gcd(b, a % b) : a; }
+
+  // 생성형 계정의 트윗 목표 길이. minLength~maxLength에 "고르게" 흩어져야 하는데,
+  // 난수로 뽑으면 뭉친다(20개 뽑으면 짧은 것만 몰리는 일이 생긴다). 그래서 사다리를 놓고
+  // rungs와 서로소인 보폭으로 칸을 밟는다 — 한 바퀴(rungs개) 동안 모든 칸을 정확히 한 번 지난다.
+  function targetLength(seq, gen) {
+    var rungs = Math.max(2, gen.max);
+    var stride = 17;
+    while (gcd(stride, rungs) !== 1) stride++; // max를 바꿔도 분포가 깨지지 않게
+    var slot = ((seq % rungs) * stride) % rungs;
+    return Math.round(gen.minLength + (gen.maxLength - gen.minLength) * slot / (rungs - 1));
+  }
+
+  // 조각을 목표 길이에 닿을 때까지 이어 붙인다. 한 트윗에 같은 조각을 두 번 쓰지 않는다.
+  // 조각은 전부 그 자체로 완결된 문장이라 공백으로만 이으면 문장이 된다.
+  function composeTweet(fragments, target, pickFn) {
+    var rest = fragments.slice(), parts = [], len = 0;
+    while (rest.length) {
+      var gap = parts.length ? 1 : 0;             // 앞 문장과 띄울 한 칸
+      var fits = rest.filter(function (f) { return f.length <= target - len - gap; });
+      if (!fits.length) break;
+      var piece = pickFn(fits);
+      rest.splice(rest.indexOf(piece), 1);
+      parts.push(piece);
+      len += piece.length + gap;
+    }
+    // 목표가 제일 짧은 조각보다도 작을 때 — 빈 트윗을 내보내지 않는다.
+    // 그래서 실제 최소 길이는 "가장 짧은 조각"이 정한다. 조각을 10자 이상으로 쓰는 이유다.
+    if (!parts.length) {
+      parts.push(fragments.reduce(function (a, b) { return b.length < a.length ? b : a; }));
+    }
+    return parts.join(" ");
+  }
+
   // 돈만 마이너스를 허용한다 — 빚을 져도 능력으로 회생할 수 있어야 하고,
   // 그 마이너스가 대출·대부 이벤트를 부르는 트리거다. 나머지 스탯은 0이 바닥.
   function clampStat(key, v) { return key === "돈" ? v : Math.max(0, v); }
@@ -67,6 +101,10 @@
       lastSettleDay: 1,
       // notifSeen: 이미 확인한 알림 수. 안 읽은 개수를 세는 기준(어느 kind가 알림인지는 ui.js가 안다).
       notifSeen: 0,
+      // npcTweets: 생성형 계정의 트윗 보관함 { "@handle": [트윗] }. 그 계정의 프로필이 이걸 그린다.
+      // npcSeq: 계정별 누적 생성 수. 보관함이 상한에서 밀려도 목표 길이 사다리는 계속 진행해야 한다.
+      // npcSeen: 그 계정을 처음 본 날 { "@handle": day }. 보관함이 이 날부터 자란다.
+      npcTweets: {}, npcSeq: {}, npcSeen: {},
       feed: [], tweetLog: [], activeEvents: [], eventHistory: [], ending: null
     };
   }
@@ -74,6 +112,9 @@
   function create(data, saved, rng) {
     var rand = rng || Math.random;
     var state = saved || initialState();
+    // 발견 기록은 실제 NPC 핸들만 남긴다 (@world 같은 시스템 작성자는 계정이 아니다)
+    var npcHandles = {};
+    data.npcs.forEach(function (n) { npcHandles[n.handle] = true; });
 
     // 구버전 세이브 호환: 나중에 추가된 스탯을 기본값으로 채운다.
     // 안 채우면 그 스탯을 쓰는 수식이 evalFormula에서 ReferenceError로 터진다.
@@ -219,6 +260,31 @@
       return item;
     }
 
+    // ── 생성형 계정의 트윗 보관함 ────────────────────────────────
+    function genRules() { return (data.timeline && data.timeline.gen) || null; }
+
+    function genAccounts() {
+      return data.npcs.filter(function (n) { return n.tweetGen && n.tweetGen.fragments; });
+    }
+
+    // count개를 만들어 보관함에 넣고 방금 넣은 것만 돌려준다.
+    // dayOf(i)로 날짜를 받는 이유: 과거 20개는 날짜가 하루씩 다르고, 오늘 몫은 전부 오늘이다.
+    function addTweets(npc, count, dayOf) {
+      var gen = genRules();
+      var box = state.npcTweets[npc.handle] || (state.npcTweets[npc.handle] = []);
+      var made = [];
+      for (var i = 0; i < count; i++) {
+        var seq = state.npcSeq[npc.handle] || 0;
+        state.npcSeq[npc.handle] = seq + 1;
+        made.push({ author: npc.handle, name: npc.name, kind: "npc",
+          text: composeTweet(npc.tweetGen.fragments, targetLength(seq, gen), pick),
+          day: dayOf(i) });
+      }
+      box.push.apply(box, made);
+      if (box.length > gen.max) box.splice(0, box.length - gen.max); // 오래된 것부터 밀려난다
+      return made;
+    }
+
     function pushEventFeed(ev, stageIdx, feedItems) {
       ev.stages[stageIdx].feed.forEach(function (t) {
         feedItems.push({ author: "@world", name: "타임라인", text: t, day: state.day, kind: "event" });
@@ -281,7 +347,7 @@
         }
       }
 
-      // 팔로잉 타임라인: NPC 계정들이 자기 전용 트윗을 올린다. 내 행동과 무관하게 흐른다.
+      // 팔로잉 타임라인: 고정 목록(tweets)을 가진 계정들이 자기 전용 트윗을 올린다.
       // drawFrom으로 뽑으므로 같은 계정이 하루에 두 번 올리지 않는다.
       var perDay = (data.timeline && data.timeline.npcTweetsPerDay) || 0;
       drawFrom(data.npcs.filter(function (n) { return n.tweets && n.tweets.length; }), perDay)
@@ -290,12 +356,38 @@
             text: fillTemplate(pick(npc.tweets)), day: state.day });
         });
 
+      // 생성형 계정: 보관함이 "발견한 날"부터 자란다. 아직 만나지 않은 계정은 조용하다
+      // (답글·좋아요로 먼저 등장해서 발견되고, 그 다음 턴부터 매일 올린다).
+      var gen = genRules();
+      if (gen) {
+        genAccounts().forEach(function (npc) {
+          var seenDay = state.npcSeen[npc.handle];
+          if (seenDay == null) return;
+          if (!state.npcTweets[npc.handle]) {
+            // 발견 전의 과거 트윗. 보관함에만 넣는다 — 홈 타임라인이 한 번에 20개로 도배되면 안 된다.
+            addTweets(npc, gen.seed, function (i) { return seenDay - gen.seed + i; });
+          }
+          addTweets(npc, gen.perDay, function () { return state.day; }).forEach(function (t) {
+            feedItems.push(t);
+          });
+        });
+      }
+
       // 팔로워가 늘면 알림에도 뜬다. 트윗·홍보·이벤트 어디서 늘어도 여기 한 곳을 지난다.
       // (tweetCategory가 null이면 pickActors가 아무 NPC나 뽑는다 — 홍보·이벤트 유입)
       var gained = statChanges["팔로워"] || 0;
       if (gained > 0) {
         feedItems.push(reactionNotif("follow", tweetCategory, gained <= 2 ? gained : 1, gained, ""));
       }
+
+      // 계정을 처음 본 날을 기록한다 — 생성형 계정의 보관함이 이 날부터 자란다.
+      // 트윗·답글·좋아요·팔로우 어느 경로로 등장했든 여기 한 곳을 지난다.
+      feedItems.forEach(function (f) {
+        (f.actors ? f.actors.map(function (a) { return a.handle; }) : [f.author])
+          .forEach(function (h) {
+            if (npcHandles[h] && state.npcSeen[h] == null) state.npcSeen[h] = state.day;
+          });
+      });
 
       data.events.forEach(function (ev) {
         var done = state.eventHistory.indexOf(ev.id) !== -1;
@@ -341,7 +433,8 @@
       previewAction: previewAction, advanceTurn: advanceTurn };
   }
 
-  return { _utils: { compare: compare, checkCond: checkCond, evalFormula: evalFormula, evalEffect: evalEffect },
+  return { _utils: { compare: compare, checkCond: checkCond, evalFormula: evalFormula,
+    evalEffect: evalEffect, targetLength: targetLength, composeTweet: composeTweet },
     create: create };
 })();
 if (typeof module !== "undefined") module.exports = Engine;

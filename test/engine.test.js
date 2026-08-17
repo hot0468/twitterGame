@@ -480,3 +480,104 @@ assert.ok(r9.feedItems.some(function (f) { return f.kind === "system"; }), "붕�
 
 console.log("Task 5 OK");
 
+// --- Task 6: 생성형 계정 (보관함 + 길이 분포) ---
+var GEN = loadData().timeline.gen;
+var genNpc = loadData().npcs.filter(function (n) { return n.tweetGen; })[0];
+assert.ok(genNpc, "생성형 계정이 하나 있다");
+
+// 목표 길이는 min~max를 고르게 덮는다 — 한 바퀴(max개) 동안 모든 칸을 정확히 한 번 지난다
+var slots = [];
+for (var s = 0; s < GEN.max; s++) slots.push(U.targetLength(s, GEN));
+assert.strictEqual(new Set(slots).size, GEN.max,
+  "목표 길이가 " + GEN.max + "칸 전부를 한 번씩 지나야 한다 (실제 " + new Set(slots).size + "종)");
+assert.strictEqual(Math.min.apply(null, slots), GEN.minLength, "최단 목표 = minLength");
+assert.strictEqual(Math.max.apply(null, slots), GEN.maxLength, "최장 목표 = maxLength");
+// 사다리를 순서대로 밟지 않는다 (그러면 초반에 짧은 트윗만 몰린다)
+assert.ok(slots[0] !== Math.min.apply(null, slots.slice(0, 5)) ||
+  slots[1] > slots[0] + 10, "목표 길이가 단조 증가하면 분포가 한쪽으로 몰린다");
+
+// 실제로 생성된 트윗이 전부 10~140자 안에 들고, 범위를 고르게 채운다
+var lengths = [];
+for (var k = 0; k < GEN.max; k++) {
+  lengths.push(U.composeTweet(genNpc.tweetGen.fragments, U.targetLength(k, GEN),
+    function (arr) { return arr[(k * 7) % arr.length]; }).length);
+}
+assert.ok(Math.min.apply(null, lengths) >= GEN.minLength,
+  "10자 미만 트윗이 나왔다: " + Math.min.apply(null, lengths));
+assert.ok(Math.max.apply(null, lengths) <= GEN.maxLength,
+  "140자 초과 트윗이 나왔다: " + Math.max.apply(null, lengths));
+// 4구간(10~42/43~75/76~107/108~140)에 모두 걸쳐야 "골고루"라 할 수 있다
+var buckets = [0, 0, 0, 0], span = (GEN.maxLength - GEN.minLength) / 4;
+lengths.forEach(function (L) {
+  buckets[Math.min(3, Math.floor((L - GEN.minLength) / span))]++;
+});
+assert.ok(buckets.every(function (b) { return b >= 5; }),
+  "길이가 한쪽으로 몰렸다 (구간별 개수: " + buckets.join("/") + ")");
+
+// 조각을 두 번 쓰지 않는다
+var longTweet = U.composeTweet(genNpc.tweetGen.fragments, GEN.maxLength, function (a) { return a[0]; });
+var sentences = longTweet.split(" ").length;
+assert.ok(longTweet.length <= GEN.maxLength, "목표를 넘지 않는다: " + longTweet.length);
+assert.ok(sentences > 1, "긴 목표는 문장 여러 개로 채운다");
+
+// 보관함은 "발견한 날"부터 자란다 — 만나기 전엔 아무것도 없다
+var gBox = Engine.create(loadData(), null, function () { return 0.99; }); // 이벤트 미발동
+assert.deepStrictEqual(gBox.getState().npcTweets, {}, "시작 시엔 보관함이 비어 있다");
+assert.deepStrictEqual(gBox.getState().npcSeen, {}, "시작 시엔 발견 기록도 없다");
+
+// 발견을 강제한다 (실제로는 답글·좋아요로 등장한다)
+var seenOn = 5;
+gBox.getState().npcSeen[genNpc.handle] = seenOn;
+gBox.getState().day = seenOn + 1;
+var rBox = gBox.advanceTurn("rest", false);
+var box = gBox.getState().npcTweets[genNpc.handle];
+assert.strictEqual(box.length, GEN.seed + GEN.perDay,
+  "발견 후 첫 턴에 과거 " + GEN.seed + "개 + 오늘 " + GEN.perDay + "개");
+// 과거 트윗은 발견한 날 이전 날짜로 깔린다
+var past = box.slice(0, GEN.seed).map(function (t) { return t.day; });
+assert.deepStrictEqual([Math.min.apply(null, past), Math.max.apply(null, past)],
+  [seenOn - GEN.seed, seenOn - 1], "과거 트윗은 발견일 직전까지의 날짜를 쓴다");
+// 과거 트윗은 내 타임라인에 흐르지 않는다 (첫날부터 20개로 도배되면 안 된다)
+assert.strictEqual(rBox.feedItems.filter(function (f) {
+  return f.kind === "npc" && f.author === genNpc.handle;
+}).length, GEN.perDay, "타임라인에는 오늘 몫만 흐른다");
+
+// 그 다음부터 하루 perDay개씩
+gBox.advanceTurn("rest", false);
+assert.strictEqual(box.length, GEN.seed + GEN.perDay * 2, "하루 " + GEN.perDay + "개씩 늘어난다");
+
+// 상한에서 멈추고, 오래된 것부터 밀려난다
+var oldestBefore;
+for (var t2 = 0; t2 < 40; t2++) {
+  if (box.length >= GEN.max) { oldestBefore = box[0].text; }
+  gBox.advanceTurn("rest", false);
+}
+assert.strictEqual(box.length, GEN.max, "보관함은 " + GEN.max + "개를 넘지 않는다: " + box.length);
+assert.notStrictEqual(box[0].text, oldestBefore, "상한에 닿으면 오래된 것부터 밀려난다");
+// 밀려나도 길이 사다리는 계속 진행한다 (같은 길이만 반복되면 안 된다)
+assert.ok(gBox.getState().npcSeq[genNpc.handle] > GEN.max,
+  "누적 생성 수는 상한과 무관하게 계속 늘어난다");
+var lateLengths = box.map(function (t) { return t.text.length; });
+assert.ok(new Set(lateLengths).size > 10,
+  "보관함 안 길이가 다양해야 한다 (실제 " + new Set(lateLengths).size + "종)");
+
+// 만나지 않은 계정은 계속 조용하다
+var gQuiet = Engine.create(loadData(), null, function () { return 0.99; });
+gQuiet.advanceTurn("rest", false);
+gQuiet.advanceTurn("rest", false);
+assert.strictEqual(gQuiet.getState().npcTweets[genNpc.handle], undefined,
+  "발견하지 않은 계정은 보관함이 생기지 않는다");
+
+// 발견 기록은 등장 경로와 무관하게 남는다 (답글·좋아요·팔로우·트윗)
+var gSeen = Engine.create(loadData(), null, function () { return 0; }); // 모든 NPC가 반응
+gSeen.getState().followers = 8000;
+gSeen.advanceTurn("meme", true);
+var seenList = Object.keys(gSeen.getState().npcSeen);
+assert.ok(seenList.length > 3, "트윗 한 번에 여러 계정을 만난다: " + seenList.length);
+seenList.forEach(function (h) {
+  assert.strictEqual(gSeen.getState().npcSeen[h], 1, h + ": 처음 본 날이 1일차로 기록된다");
+});
+assert.ok(seenList.indexOf("@world") === -1, "@world는 계정이 아니라서 기록하지 않는다");
+
+console.log("Task 6 OK");
+

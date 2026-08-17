@@ -311,7 +311,12 @@ var UI = (function () {
     var byAuthor = function (kind) {
       return state.feed.filter(function (f) { return f.kind === kind && f.author === handle; });
     };
-    var posts = npc ? byAuthor("npc") : state.tweetLog.slice().reverse();
+    // 생성형 계정은 보관함이 그 계정의 타임라인이다 — 발견 전 과거 트윗까지 여기 있고,
+    // feed에는 내가 실제로 본 것만 있다. 고정 목록 계정은 feed에서 걸러 쓴다.
+    var box = state.npcTweets && state.npcTweets[handle];
+    var posts = npc
+      ? (box ? box.slice().reverse() : byAuthor("npc"))
+      : state.tweetLog.slice().reverse();
     var replies = npc ? byAuthor("reply")
       : state.feed.filter(function (f) { return f.kind === "reply"; });
 
