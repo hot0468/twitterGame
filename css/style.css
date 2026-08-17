@@ -132,6 +132,21 @@ body { background: var(--bg); color: var(--text); font-size: var(--fs-sm);
 .tweet.system { background: #fef8ef; border-left-color: #d99916; }
 .tweet.system .avatar { background: #fceecf; color: #b5730e; }
 
+/* 클릭하면 상세로 들어가는 트윗 */
+.tweet[data-detail] { cursor: pointer; }
+.tweet[data-detail]:hover { background: var(--hover); }
+.tweet.event[data-detail]:hover { background: #e9f4fd; }
+
+/* ── 트윗 상세 ─────────────────────────────────── */
+.detail-head { display: flex; align-items: center; gap: 14px; padding: 8px 14px;
+  border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 4;
+  background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(12px); }
+.detail-head h2 { font-size: var(--fs-md); }
+/* 원본 트윗은 답글보다 크게 — 실제 X 상세와 같은 위계 */
+.tweet.detail { padding: 14px; }
+.tweet.detail .text { font-size: var(--fs-md); margin: 5px 0 9px; }
+.tweet.detail .meta { padding-top: 9px; border-top: 1px solid var(--border); }
+
 /* ── 알림 항목 (좋아요·리트윗) ─────────────────── */
 .notif { display: flex; gap: 10px; padding: 11px 14px; border-bottom: 1px solid var(--border); }
 .notif-icon { flex-shrink: 0; padding-left: 0.4rem; }

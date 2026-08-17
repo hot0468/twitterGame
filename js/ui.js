@@ -21,26 +21,38 @@ var UI = (function () {
     "논란성": { icon: "flame", tone: "hot" }
   };
 
-  // 좋아요·리트윗은 알림에만, 내 트윗·리플·이벤트는 타임라인에도 뜬다
-  var TIMELINE_KINDS = ["me", "reply", "event", "system"];
-  var NOTIF_KINDS = ["like", "retweet", "reply", "event", "system"];
+  // 실제 트위터처럼 답글은 홈 타임라인에 안 뜬다 — 알림에서 보거나 트윗 상세로 들어가야 한다
+  var TIMELINE_KINDS = ["me", "event", "system"];
+  var NOTIF_KINDS = ["like", "retweet", "follow", "reply", "event", "system"];
 
   function avatarIcon(item) {
     if (item.author === "me") return "circle-user";
     if (item.kind === "event") return "globe";
     if (item.kind === "system") return "triangle-alert";
-    return "message-circle";
+    return "circle-user"; // 답글은 사람이 쓴 것 — 알림 아바타와 같은 아이콘
   }
 
-  function tweetEl(item) {
+  // data-value에 최종 수치를 남긴다 — 카운트업이 textContent를 덮어써도 목표치를 잃지 않는다
+  function metricEl(icon, n) {
+    n = n || 0;
+    return '<span class="metric">' + Icons.svg(icon) +
+      '<span class="num" data-value="' + n + '">' + n.toLocaleString() + "</span></span>";
+  }
+
+  function tweetEl(item, opts) {
+    opts = opts || {};
     var div = document.createElement("div");
-    div.className = "tweet " + item.kind;
+    div.className = "tweet " + item.kind + (opts.detail ? " detail" : "");
+    // 클릭하면 상세로: 내 트윗은 자기 스레드, 답글은 원본 트윗의 스레드로 간다.
+    // 상세 화면 안에서는 더 들어갈 곳이 없으므로 링크를 걸지 않는다.
+    if (!opts.detail) {
+      var target = item.kind === "me" ? item.id : (item.kind === "reply" ? item.replyTo : null);
+      if (target) div.dataset.detail = target;
+    }
     var who = item.author === "me" ? "나" : (item.name || item.author);
     var handle = item.author === "me" ? "@me" : item.author;
     var metrics = item.kind === "me"
-      ? '<span class="metric">' + Icons.svg("heart") + (item.likes || 0).toLocaleString() + "</span>" +
-        '<span class="metric">' + Icons.svg("repeat-2") + (item.rts || 0).toLocaleString() + "</span>" +
-        '<span class="metric">' + Icons.svg("chart-column") + (item.views || 0).toLocaleString() + "</span>"
+      ? metricEl("heart", item.likes) + metricEl("repeat-2", item.rts) + metricEl("chart-column", item.views)
       : "";
     div.innerHTML =
       '<div class="avatar">' + Icons.svg(avatarIcon(item)) + "</div>" +
@@ -60,27 +72,33 @@ var UI = (function () {
     return names[0] + " 님이";
   }
 
+  // 반응 알림 3종. 팔로우엔 인용할 트윗이 없어서 미리보기 줄을 아예 안 만든다.
+  var REACTIONS = {
+    like: { icon: "heart", verb: " 내 게시물을 마음에 들어 합니다" },
+    retweet: { icon: "repeat-2", verb: " 내 게시물을 재게시했습니다" },
+    follow: { icon: "user-plus", verb: " 회원님을 팔로우하기 시작했습니다" }
+  };
+
   function reactionEl(item) {
+    var r = REACTIONS[item.kind];
     var div = document.createElement("div");
     div.className = "notif " + item.kind;
     var avatars = item.actors.map(function () {
       return '<div class="avatar small">' + Icons.svg("circle-user") + "</div>";
     }).join("");
     div.innerHTML =
-      '<div class="notif-icon">' + Icons.svg(item.kind === "like" ? "heart" : "repeat-2") + "</div>" +
+      '<div class="notif-icon">' + Icons.svg(r.icon) + "</div>" +
       '<div class="notif-body"><div class="notif-avatars">' + avatars + "</div>" +
       '<div class="notif-line"><b class="who"></b><span class="verb"></span></div>' +
-      '<div class="notif-preview"></div></div>';
+      (item.text ? '<div class="notif-preview"></div>' : "") + "</div>";
     div.querySelector(".who").textContent = actorPhrase(item);
-    div.querySelector(".verb").textContent =
-      (item.kind === "like" ? " 내 게시물을 마음에 들어 합니다" : " 내 게시물을 재게시했습니다") +
-      " · " + item.day + "일차";
-    div.querySelector(".notif-preview").textContent = item.text;
+    div.querySelector(".verb").textContent = r.verb + " · " + item.day + "일차";
+    if (item.text) div.querySelector(".notif-preview").textContent = item.text;
     return div;
   }
 
   function feedItemEl(item) {
-    return item.kind === "like" || item.kind === "retweet" ? reactionEl(item) : tweetEl(item);
+    return REACTIONS[item.kind] ? reactionEl(item) : tweetEl(item);
   }
 
   function renderFeed(el, items, emptyText) {
@@ -93,6 +111,66 @@ var UI = (function () {
       return;
     }
     items.forEach(function (it) { el.appendChild(feedItemEl(it)); });
+  }
+
+  // 방금 올린 트윗의 반응이 밀려드는 연출. 표시만 건드리며 수치는 엔진이 정한 그대로다.
+  function countUp(el, to, ms) {
+    if (to <= 0) return;
+    var start = null;
+    el.textContent = "0";
+    requestAnimationFrame(function step(t) {
+      if (start === null) start = t;
+      var p = Math.min((t - start) / ms, 1);
+      // ease-out — 초반에 확 몰리고 끝에서 잦아든다
+      el.textContent = Math.round(to * (1 - Math.pow(1 - p, 3))).toLocaleString();
+      if (p < 1) requestAnimationFrame(step);
+    });
+  }
+
+  // 타임라인 맨 위 = 방금 쓴 트윗(engine이 feed를 최신순으로 쌓는다)
+  function animateLatestMetrics() {
+    var tweet = document.querySelector("#feed .tweet.me");
+    if (!tweet) return;
+    tweet.querySelectorAll(".metric .num").forEach(function (n, i) {
+      countUp(n, Number(n.dataset.value), 1200 + i * 150);
+    });
+  }
+
+  // ── 트윗 상세 ──────────────────────────────────
+  var currentView = "home";
+  var detailTweetId = null;
+  var detailReturnView = "home";
+
+  function openTweetDetail(id) {
+    if (!id || id === detailTweetId) return;
+    // 상세에서 상세로 넘어갈 때 원래 돌아갈 곳을 잃지 않는다
+    if (currentView !== "tweet") detailReturnView = currentView;
+    detailTweetId = id;
+    switchView("tweet");
+  }
+
+  function closeTweetDetail() {
+    detailTweetId = null;
+    switchView(detailReturnView);
+  }
+
+  function renderTweetDetail(state) {
+    if (!detailTweetId) return;
+    var main = $("tweet-detail-main");
+    main.innerHTML = "";
+    var tweet = state.tweetLog.concat(state.feed).filter(function (t) {
+      return t.id === detailTweetId;
+    })[0];
+    if (!tweet) {
+      renderFeed(main, [], "게시물을 찾을 수 없습니다.");
+      renderFeed($("tweet-detail-replies"), [], "");
+      return;
+    }
+    main.appendChild(tweetEl(tweet, { detail: true }));
+    var replies = state.feed.filter(function (f) {
+      return f.kind === "reply" && f.replyTo === detailTweetId;
+    });
+    renderFeed($("tweet-detail-replies"), replies, "아직 답글이 없습니다.");
   }
 
   var profileTab = "posts";
@@ -122,6 +200,7 @@ var UI = (function () {
     var timeline = state.feed.filter(function (f) { return TIMELINE_KINDS.indexOf(f.kind) !== -1; });
     renderFeed($("feed"), timeline, "타임라인이 조용합니다. 첫 트윗을 써보세요.");
     renderProfile(state);
+    renderTweetDetail(state);
     // 마운트 지점이 둘(데스크톱=사이드바, 모바일=상단 스트립) — CSS가 하나만 보여준다
     document.querySelectorAll("[data-stats]").forEach(function (panel) {
       panel.innerHTML = "";
@@ -247,7 +326,8 @@ var UI = (function () {
   }
 
   function switchView(name) {
-    ["home", "profile", "notif"].forEach(function (v) {
+    currentView = name;
+    ["home", "profile", "notif", "tweet"].forEach(function (v) {
       document.getElementById("view-" + v).classList.toggle("hidden", v !== name);
     });
     // [data-view]로 한정 — 스탯 토글도 .nav-btn이지만 뷰가 없어서 여기 끼면 active가 꼬인다
@@ -259,8 +339,10 @@ var UI = (function () {
   return { renderAll: renderAll, showActions: showActions, hideActions: hideActions,
     openTweetPrompt: openTweetPrompt, closeTweetPrompt: closeTweetPrompt,
     showDayTransition: showDayTransition, dateLabel: dateLabel,
+    animateLatestMetrics: animateLatestMetrics,
     showEnding: showEnding, switchView: switchView,
     setProfileTab: setProfileTab, toggleStats: toggleStats, closeStats: closeStats,
-    toggleAccountMenu: toggleAccountMenu, closeAccountMenu: closeAccountMenu };
+    toggleAccountMenu: toggleAccountMenu, closeAccountMenu: closeAccountMenu,
+    openTweetDetail: openTweetDetail, closeTweetDetail: closeTweetDetail };
 })();
 if (typeof module !== "undefined") module.exports = UI;

@@ -81,6 +81,16 @@
       <section id="view-notif" class="view hidden">
         <div id="notif-list" class="feed"></div>
       </section>
+
+      <!-- 트윗 상세: 원본 트윗 + 거기 달린 답글. 홈 타임라인에는 답글이 안 뜬다 -->
+      <section id="view-tweet" class="view hidden">
+        <div class="detail-head">
+          <button id="detail-back" class="icon-btn" data-icon="arrow-left" aria-label="뒤로"></button>
+          <h2>게시물</h2>
+        </div>
+        <div id="tweet-detail-main"></div>
+        <div id="tweet-detail-replies" class="feed"></div>
+      </section>
     </main>
   </div>
 

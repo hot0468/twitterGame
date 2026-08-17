@@ -21,7 +21,10 @@
     var result = game.advanceTurn(actionId, doTweet);
     save(game.getState());
     refresh();
+    // 트윗을 한 턴에만 카운트업 — 안 그러면 딤이 걷힐 때 지난 트윗 숫자가 다시 올라간다
+    var posted = result.feedItems.filter(function (f) { return f.kind === "me"; }).length > 0;
     UI.showDayTransition(game.getState().day, function () {
+      if (posted) UI.animateLatestMetrics();
       if (result.ending) UI.showEnding(result.ending, newGame);
     });
   }
@@ -76,6 +79,17 @@
     if (!e.target.closest(".stats-strip")) UI.closeStats();
     if (!e.target.closest(".account-menu")) UI.closeAccountMenu();
   });
+
+  // 트윗 클릭 → 상세. 위임으로 걸어야 다시 렌더된 트윗에도 계속 붙는다
+  document.addEventListener("click", function (e) {
+    var target = e.target.closest(".tweet[data-detail]");
+    if (!target) return;
+    closePopovers();
+    UI.openTweetDetail(target.dataset.detail);
+    refresh();
+  });
+
+  document.getElementById("detail-back").onclick = function () { UI.closeTweetDetail(); };
 
   document.querySelectorAll(".tab-btn").forEach(function (btn) {
     btn.onclick = function () { UI.setProfileTab(btn.dataset.tab); refresh(); };

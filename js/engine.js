@@ -39,11 +39,26 @@
     return Math.round(Function.apply(null, names.concat("return (" + expr + ")")).apply(null, vals));
   }
 
+  // 멘탈 = 컨디션 배수. 지쳐 있으면 같은 글을 써도 덜 먹힌다.
+  // 50이 기준점(×1.0)이라 기존 밸런스는 그대로고, 관리하면 최대 ×1.2 / 방치하면 ×0.4까지 떨어진다.
+  function morale(mental) {
+    return Math.max(0.4, Math.min(1.2, (mental || 0) / 50));
+  }
+
+  // 팔로워 "증가"만 컨디션을 탄다(감소는 그대로 — 지쳤다고 덜 빠지진 않는다).
+  // preview와 실제가 반드시 같은 함수를 거쳐야 팝업 숫자와 적용값이 어긋나지 않는다.
+  function evalEffect(key, expr, against) {
+    var v = evalFormula(expr, against);
+    return key === "팔로워" && v > 0 ? Math.round(v * morale(against.stats.멘탈)) : v;
+  }
+
   function initialState() {
     return {
       day: 1, followers: 10,
       // 돈만 원 단위(정수 원). 표기는 ui.js가 천 단위 구분 + "원"을 붙인다.
       stats: { 글빨: 5, 유머: 5, 감각: 5, 멘탈: 50, 돈: 300000, 논란성: 0 },
+      // tweetSeq: 트윗 id 발급용. 답글이 어느 트윗에 달렸는지(replyTo) 가리키는 근거.
+      tweetSeq: 0,
       feed: [], tweetLog: [], activeEvents: [], eventHistory: [], ending: null
     };
   }
@@ -54,9 +69,17 @@
 
     // 구버전 세이브 호환: 나중에 추가된 스탯을 기본값으로 채운다.
     // 안 채우면 그 스탯을 쓰는 수식이 evalFormula에서 ReferenceError로 터진다.
-    var defaults = initialState().stats;
-    Object.keys(defaults).forEach(function (k) {
-      if (typeof state.stats[k] !== "number") state.stats[k] = defaults[k];
+    var blank = initialState();
+    Object.keys(blank.stats).forEach(function (k) {
+      if (typeof state.stats[k] !== "number") state.stats[k] = blank.stats[k];
+    });
+    // 나중에 추가된 최상위 필드(tweetSeq 등)도 같이 채운다
+    Object.keys(blank).forEach(function (k) {
+      if (state[k] === undefined) state[k] = blank[k];
+    });
+    // id 없이 저장된 옛 트윗에 id를 붙여준다 — 없으면 상세 페이지를 열 수 없다
+    state.tweetLog.concat(state.feed).forEach(function (t) {
+      if (t.kind === "me" && !t.id) t.id = "tw" + ++state.tweetSeq;
     });
 
     function getActions() {
@@ -83,7 +106,7 @@
 
       function evaluated(effects, against) {
         var out = {};
-        Object.keys(effects || {}).forEach(function (k) { out[k] = evalFormula(effects[k], against); });
+        Object.keys(effects || {}).forEach(function (k) { out[k] = evalEffect(k, effects[k], against); });
         return out;
       }
       var effects = evaluated(action.effects, state);
@@ -111,7 +134,7 @@
 
     function applyEffects(effects, statChanges) {
       for (var k in effects) {
-        var delta = evalFormula(effects[k], state);
+        var delta = evalEffect(k, effects[k], state);
         if (k === "팔로워") state.followers = Math.max(0, state.followers + delta);
         else state.stats[k] = Math.max(0, (state.stats[k] || 0) + delta);
         statChanges[k] = (statChanges[k] || 0) + delta;
@@ -124,22 +147,31 @@
       var s = state.stats;
       // 노출: 팔로워가 기본, 감각이 타이밍을 잡아 알고리즘 확산을 늘린다
       var views = Math.round(state.followers * (1 + Math.min(s.감각, 40) * 0.06));
-      // 반응률: 글빨이 올리지만 체감 감소 (0.012 → 최대 약 0.037)
-      var likes = Math.round(views * (0.012 + 0.03 * s.글빨 / (s.글빨 + 20)));
+      // 반응률: 글빨이 올리지만 체감 감소 (0.012 → 최대 약 0.037). 컨디션이 나쁘면 그만큼 덜 먹힌다
+      var likes = Math.round(views * (0.012 + 0.03 * s.글빨 / (s.글빨 + 20)) * morale(s.멘탈));
       // 리트윗은 좋아요의 일부. 확산성은 유머가 끌어올린다
       var rts = Math.round(likes * (0.08 + Math.min(s.유머, 40) * 0.004));
       return { views: views, likes: likes, rts: rts };
     }
 
-    // 좋아요·리트윗 알림에 이름을 올릴 계정을 고른다. 카테고리가 맞는 계정 우선.
-    function pickActors(category, count) {
-      var matching = data.npcs.filter(function (n) { return n.reactsTo.indexOf(category) !== -1; });
-      var pool = (matching.length ? matching : data.npcs).slice();
-      var picked = [];
-      while (picked.length < count && pool.length) {
-        picked.push(pool.splice(Math.floor(rand() * pool.length), 1)[0]);
+    function drawFrom(pool, count) {
+      var out = [], rest = pool.slice();
+      while (out.length < count && rest.length) {
+        out.push(rest.splice(Math.floor(rand() * rest.length), 1)[0]);
       }
-      return picked;
+      return out;
+    }
+
+    // 반응할 계정을 중복 없이 고른다. 카테고리가 맞는 계정을 먼저 쓰고, 부족하면 나머지에서 채운다.
+    function pickActors(category, count) {
+      var matching = [], others = [];
+      data.npcs.forEach(function (n) {
+        (n.reactsTo.indexOf(category) !== -1 ? matching : others).push(n);
+      });
+      var picked = drawFrom(matching, count);
+      return picked.length < count
+        ? picked.concat(drawFrom(others, count - picked.length))
+        : picked;
     }
 
     // 실제 트위터 알림 형태: 이름 1~2개 + "외 N명". total은 전체 좋아요/리트윗 수.
@@ -160,7 +192,7 @@
     // doTweet: 행동을 트윗으로 올릴지. 행동 효과는 무조건, 트윗 효과는 doTweet일 때만 적용된다.
     // 이벤트 선택지("event:…")는 그 자체가 대응이라 doTweet를 보지 않는다.
     function advanceTurn(actionId, doTweet) {
-      var feedItems = [], statChanges = {}, triggeredEvents = [];
+      var feedItems = [], statChanges = {}, triggeredEvents = [], tweetCategory = null;
 
       if (actionId.indexOf("event:") === 0) {
         var parts = actionId.split(":");
@@ -181,10 +213,12 @@
         if (action) {
           applyEffects(action.effects, statChanges);
           if (doTweet && action.tweet) {
+            tweetCategory = action.tweet.category;
             applyEffects(action.tweet.effects, statChanges);
             // 팔로워 변동이 이미 적용된 뒤에 반응을 잰다 — 새로 들어온 사람도 이 트윗을 본다
             var eng = engagement();
             var tweet = {
+              id: "tw" + ++state.tweetSeq,
               author: "me", text: fillTemplate(pick(action.tweet.templates)), day: state.day,
               likes: eng.likes, rts: eng.rts, views: eng.views, kind: "me"
             };
@@ -200,13 +234,22 @@
               feedItems.push(reactionNotif("retweet", action.tweet.category, 1, eng.rts, tweet.text));
             }
 
-            // 리플은 좋아요보다 훨씬 드물다 — NPC를 늘렸으므로 확률을 낮춰 균형을 맞춘다
-            data.npcs.forEach(function (npc) {
-              if (npc.reactsTo.indexOf(action.tweet.category) !== -1 && rand() < 0.25)
-                feedItems.push({ author: npc.handle, name: npc.name, text: pick(npc.replies), day: state.day, kind: "reply" });
+            // 답글은 좋아요의 일부(실제 트위터도 답글이 훨씬 적다). NPC 수가 스레드 길이의 상한.
+            // replyTo로 원본 트윗을 가리켜야 상세 페이지에서 줄줄이 볼 수 있다.
+            var replyCount = Math.min(Math.round(eng.likes * 0.12), data.npcs.length);
+            pickActors(action.tweet.category, replyCount).forEach(function (npc) {
+              feedItems.push({ author: npc.handle, name: npc.name, text: pick(npc.replies),
+                day: state.day, kind: "reply", replyTo: tweet.id });
             });
           }
         }
+      }
+
+      // 팔로워가 늘면 알림에도 뜬다. 트윗·홍보·이벤트 어디서 늘어도 여기 한 곳을 지난다.
+      // (tweetCategory가 null이면 pickActors가 아무 NPC나 뽑는다 — 홍보·이벤트 유입)
+      var gained = statChanges["팔로워"] || 0;
+      if (gained > 0) {
+        feedItems.push(reactionNotif("follow", tweetCategory, gained <= 2 ? gained : 1, gained, ""));
       }
 
       data.events.forEach(function (ev) {
@@ -241,7 +284,8 @@
       previewAction: previewAction, advanceTurn: advanceTurn };
   }
 
-  return { _utils: { compare: compare, checkCond: checkCond, evalFormula: evalFormula }, create: create };
+  return { _utils: { compare: compare, checkCond: checkCond, evalFormula: evalFormula, evalEffect: evalEffect },
+    create: create };
 })();
 if (typeof module !== "undefined") module.exports = Engine;
 
