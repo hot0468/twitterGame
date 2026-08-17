@@ -622,5 +622,50 @@ seenList.forEach(function (h) {
 });
 assert.ok(seenList.indexOf("@world") === -1, "@world는 계정이 아니라서 기록하지 않는다");
 
+// 남의 트윗 반응(좋아요·리트윗)은 하루를 소모하지 않고 스탯도 안 건드린다
+var gRe = Engine.create(loadData(), null, function () { return 0.5; });
+loadData().npcs.forEach(function (n) { gRe.getState().npcSeen[n.handle] = 1; });
+gRe.advanceTurn("rest", false);
+var someTweet = gRe.getState().npcTweets[Object.keys(gRe.getState().npcTweets)[0]][0];
+assert.ok(someTweet.id, "남의 트윗에 id가 있다");
+assert.strictEqual(typeof someTweet.likes, "number", "남의 트윗에도 좋아요 수가 있다");
+assert.strictEqual(typeof someTweet.rts, "number", "리트윗 수도 있다");
+
+var beforeDay = gRe.getState().day;
+var beforeStats = JSON.stringify(gRe.getState().stats);
+var beforeFollowers = gRe.getState().followers;
+var res = gRe.toggleReaction(someTweet.id, "like");
+assert.deepStrictEqual(res, { id: someTweet.id, kind: "like", on: true }, "누르면 켜진다");
+assert.strictEqual(gRe.getState().day, beforeDay, "반응은 하루를 소모하지 않는다");
+assert.strictEqual(JSON.stringify(gRe.getState().stats), beforeStats, "스탯을 건드리지 않는다");
+assert.strictEqual(gRe.getState().followers, beforeFollowers, "팔로워도 안 늘어난다");
+assert.strictEqual(gRe.getState().reacted[someTweet.id].like, true, "누른 기록이 남는다");
+// 다시 누르면 꺼진다
+assert.strictEqual(gRe.toggleReaction(someTweet.id, "like").on, false, "다시 누르면 꺼진다");
+assert.strictEqual(gRe.getState().reacted[someTweet.id].like, false);
+// 좋아요와 리트윗은 따로 기억한다
+gRe.toggleReaction(someTweet.id, "rt");
+assert.strictEqual(gRe.getState().reacted[someTweet.id].rt, true);
+assert.strictEqual(gRe.getState().reacted[someTweet.id].like, false, "둘은 서로 독립이다");
+// 엉뚱한 입력은 무시
+assert.strictEqual(gRe.toggleReaction(null, "like"), null);
+assert.strictEqual(gRe.toggleReaction(someTweet.id, "hug"), null, "모르는 종류는 무시");
+// 반응 기록은 세이브에 남는다
+var carriedRe = JSON.parse(JSON.stringify(gRe.getState()));
+assert.strictEqual(Engine.create(loadData(), carriedRe).getState().reacted[someTweet.id].rt, true,
+  "반응 기록이 세이브를 넘어 유지된다");
+
+// 옛 세이브의 남의 트윗에는 좋아요·리트윗 수가 없다 — create()가 채워야 0으로 안 보인다
+var legacyRe = JSON.parse(JSON.stringify(gRe.getState()));
+var h0 = Object.keys(legacyRe.npcTweets)[0];
+legacyRe.npcTweets[h0].forEach(function (t) { delete t.likes; delete t.rts; });
+delete legacyRe.reacted;
+var gFix = Engine.create(loadData(), legacyRe);
+assert.deepStrictEqual(gFix.getState().reacted, {}, "reacted가 없던 세이브도 채워진다");
+gFix.getState().npcTweets[h0].forEach(function (t) {
+  assert.strictEqual(typeof t.likes, "number", "옛 트윗에 좋아요 수가 채워진다");
+  assert.strictEqual(typeof t.rts, "number", "옛 트윗에 리트윗 수가 채워진다");
+});
+
 console.log("Task 6 OK");
 

@@ -91,6 +91,30 @@ var UI = (function () {
       '<span class="num" data-value="' + n + '">' + n.toLocaleString() + "</span></span>";
   }
 
+  // 남의 트윗에 붙는 반응 버튼. 누른 상태는 state.reacted에 남는다.
+  // 내가 누르면 표시 수치가 1 올라간다(실제 X와 동일) — 원본 수치는 그대로 두고 표시만 더한다.
+  function reactBtn(id, kind, icon, base, on) {
+    var n = (base || 0) + (on ? 1 : 0);
+    return '<button class="react ' + kind + (on ? " on" : "") +
+      '" data-react="' + kind + '" data-react-id="' + id + '"' +
+      ' aria-pressed="' + (on ? "true" : "false") + '">' +
+      Icons.svg(icon) + "<span>" + (n > 0 ? n.toLocaleString() : "") + "</span></button>";
+  }
+
+  // 내가 누른 반응. renderAll이 매 렌더 시작에 채운다 — tweetEl까지 인자로 흘리면
+  // renderFeed·feedItemEl 서명이 전부 바뀌므로 렌더 범위 변수로 둔다.
+  var reactedNow = {};
+
+  // 반응은 id가 있는 남의 트윗만 — 답글은 자기 id가 없어서(replyTo만 있다) 대상이 아니고,
+  // 내 트윗은 읽기 전용 수치를 보여준다.
+  function reactRow(item) {
+    if (item.kind !== "npc" || !item.id) return "";
+    var r = reactedNow[item.id] || {};
+    return '<div class="actions">' +
+      reactBtn(item.id, "rt", "repeat-2", item.rts, r.rt) +
+      reactBtn(item.id, "like", "heart", item.likes, r.like) + "</div>";
+  }
+
   function tweetEl(item, opts) {
     opts = opts || {};
     var div = document.createElement("div");
@@ -110,7 +134,8 @@ var UI = (function () {
     div.innerHTML =
       '<div class="avatar"' + avatarAttr(item) + ">" + avatarInner(item) + "</div>" +
       '<div class="body"><span class="who"></span> <span class="handle"></span>' +
-      '<div class="text"></div><div class="meta"><span>' + shortDate(item.day) + "</span>" + metrics + "</div></div>";
+      '<div class="text"></div><div class="meta"><span>' + shortDate(item.day) + "</span>" + metrics +
+      "</div>" + reactRow(item) + "</div>";
     div.querySelector(".who").textContent = who;
     div.querySelector(".handle").textContent = handle;
     div.querySelector(".text").textContent = item.text;
@@ -494,6 +519,7 @@ var UI = (function () {
   }
 
   function renderAll(state) {
+    reactedNow = state.reacted || {}; // 이 렌더 동안 tweetEl이 참조한다
     $("day").textContent = state.day + "일차 · " + dateLabel(state.day);
     $("followers").textContent = "팔로워 " + state.followers.toLocaleString();
     var timeline = state.feed.filter(function (f) { return TIMELINE_KINDS.indexOf(f.kind) !== -1; });

@@ -69,7 +69,8 @@
       notifSeen: 0,
       // npcTweets: 계정별 트윗 보관함 { "@handle": [트윗] }. 그 계정의 프로필이 이걸 그린다.
       // npcSeen: 그 계정을 처음 본 날 { "@handle": day }. 보관함이 이 날부터 자란다.
-      npcTweets: {}, npcSeen: {},
+      // reacted: 내가 좋아요·리트윗한 남의 트윗 { "tw12": { like: true, rt: true } }.
+      npcTweets: {}, npcSeen: {}, reacted: {},
       feed: [], tweetLog: [], activeEvents: [], eventHistory: [], ending: null
     };
   }
@@ -77,9 +78,17 @@
   function create(data, saved, rng) {
     var rand = rng || Math.random;
     var state = saved || initialState();
-    // 발견 기록은 실제 NPC 핸들만 남긴다 (@world 같은 시스템 작성자는 계정이 아니다)
+    // 핸들 → 계정. 발견 기록은 실제 NPC만 남긴다(@world 같은 시스템 작성자는 계정이 아니다).
     var npcHandles = {};
-    data.npcs.forEach(function (n) { npcHandles[n.handle] = true; });
+    data.npcs.forEach(function (n) { npcHandles[n.handle] = n; });
+
+    // 남의 트윗 반응 수. 그 계정의 팔로워 규모에 비례하게 만들 때 한 번만 뽑아 저장한다 —
+    // 렌더할 때마다 뽑으면 숫자가 매번 바뀐다.
+    function setCounts(t, npc) {
+      var f = (npc && npc.followers) || 1000;
+      t.likes = Math.round(f * (0.003 + rand() * 0.009));
+      t.rts = Math.round(t.likes * (0.06 + rand() * 0.18));
+    }
 
     // 구버전 세이브 호환: 나중에 추가된 스탯을 기본값으로 채운다.
     // 안 채우면 그 스탯을 쓰는 수식이 evalFormula에서 ReferenceError로 터진다.
@@ -104,6 +113,18 @@
     // 알림 읽음 기준이 없던 세이브는 지금까지를 다 읽은 것으로 본다 — 켜자마자 수십 개가 안 읽음으로
     // 뜨면 안 된다. feed.length는 알림 종류만 센 게 아니라 넉넉하지만 안 읽은 수는 0으로 잘려 안전하다.
     if (missing.notifSeen) state.notifSeen = state.feed.length;
+
+    // 남의 트윗에 반응 버튼이 생기면서 좋아요·리트윗 수가 필요해졌다.
+    // 옛 세이브의 트윗에는 없으므로 여기서 채운다 — 안 채우면 전부 0으로 보인다.
+    // 보관함과 피드는 저장/복원 뒤 서로 다른 객체라 양쪽 다 훑어야 한다.
+    Object.keys(state.npcTweets).forEach(function (h) {
+      state.npcTweets[h].forEach(function (t) {
+        if (typeof t.likes !== "number") setCounts(t, npcHandles[h]);
+      });
+    });
+    state.feed.forEach(function (f) {
+      if (f.kind === "npc" && typeof f.likes !== "number") setCounts(f, npcHandles[f.author]);
+    });
 
     // 새 계정이어도 첫 화면이 빈 타임라인이면 안 된다. 가입할 때 몇 계정을 팔로우한 셈으로
     // 시작하고(발견일 = 1일차), 그들의 최근 트윗을 첫 타임라인에 깔아준다.
@@ -276,9 +297,11 @@
         var src = pick(free);
         // id는 내 트윗과 같은 seq를 쓴다 — 겹치지 않아야 상세 페이지가 엉키지 않는다.
         // 보관함에만 있는 트윗도 상세로 열 수 있어야 하므로 전부 id를 받는다.
-        made.push({ id: "tw" + ++state.tweetSeq, src: src,
+        var t = { id: "tw" + ++state.tweetSeq, src: src,
           author: npc.handle, name: npc.name, kind: "npc",
-          text: fillTemplate(src), day: dayOf(i) });
+          text: fillTemplate(src), day: dayOf(i) };
+        setCounts(t, npc);
+        made.push(t);
       }
       box.push.apply(box, made);
       if (box.length > gen.max) box.splice(0, box.length - gen.max); // 오래된 것부터 밀려난다
@@ -423,8 +446,19 @@
       return { feedItems: feedItems, statChanges: statChanges, triggeredEvents: triggeredEvents,
         ending: ending, settlement: settlement };
     }
+    // 남의 트윗에 좋아요·리트윗. **하루를 소모하지 않는다** — 날짜를 넘기는 건 advanceTurn뿐이다.
+    // 좋아요 한 번에 하루가 가면 못 쓸 기능이 된다. 스탯에도 영향을 주지 않는다(반응은 448개
+    // 트윗에 다 누를 수 있어서, 팔로워를 주면 공짜 성장 경로가 된다).
+    function toggleReaction(tweetId, kind) {
+      if (!tweetId || (kind !== "like" && kind !== "rt")) return null;
+      var r = state.reacted[tweetId] || (state.reacted[tweetId] = {});
+      r[kind] = !r[kind];
+      return { id: tweetId, kind: kind, on: r[kind] };
+    }
+
     return { getState: function () { return state; }, getActions: getActions,
-      previewAction: previewAction, advanceTurn: advanceTurn };
+      previewAction: previewAction, advanceTurn: advanceTurn,
+      toggleReaction: toggleReaction };
   }
 
   return { _utils: { compare: compare, checkCond: checkCond, evalFormula: evalFormula,

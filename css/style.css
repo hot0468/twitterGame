@@ -145,6 +145,20 @@ body { background: var(--bg); color: var(--text); font-size: var(--fs-sm);
 .tweet .meta { display: flex; align-items: center; gap: 16px;
   color: var(--muted); font-size: var(--fs-xs); }
 .tweet .metric { display: flex; align-items: center; gap: 5px; }
+
+/* 남의 트윗의 리트윗·좋아요 버튼. 하루를 소모하지 않는 조작이라 컴포즈와 무관하다 */
+.actions { display: flex; gap: 18px; margin-top: 6px; }
+.react { display: flex; align-items: center; gap: 5px;
+  padding: 4px 7px; margin: -4px -7px; background: none; border: none; border-radius: 999px;
+  color: var(--muted); font-family: inherit; font-size: var(--fs-xs); cursor: pointer;
+  font-variant-numeric: tabular-nums; }
+.react span { min-width: 1.2em; text-align: left; }
+.react.rt:hover { color: #00ba7c; background: #e3f7ef; }      /* X의 리트윗 초록 */
+.react.like:hover { color: #f91880; background: #fdeaf2; }    /* X의 좋아요 핑크 */
+.react.rt.on { color: #00ba7c; }
+.react.like.on { color: #f91880; }
+/* 누른 좋아요는 하트를 채워서 한눈에 보이게 */
+.react.like.on .icon { fill: #f91880; }
 .tweet.event, .tweet.system { border-left: 3px solid; padding-left: 11px; }
 .tweet.event { background: #f2f9fe; border-left-color: var(--accent); }
 .tweet.event .avatar { background: #ddeefb; color: var(--accent); }

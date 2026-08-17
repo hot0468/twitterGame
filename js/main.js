@@ -106,6 +106,15 @@
   // 트윗·아바타 클릭 → 상세/프로필. 위임으로 걸어야 다시 렌더된 항목에도 계속 붙는다.
   // 아바타는 트윗 안에 있으므로 반드시 먼저 본다 — 안 그러면 아바타를 눌러도 트윗 상세로 새어나간다.
   document.addEventListener("click", function (e) {
+    // 반응 버튼이 트윗 안에 있으므로 제일 먼저 본다 — 안 그러면 눌러도 트윗 상세로 새어나간다.
+    // 하루를 소모하지 않으므로 resolveTurn을 거치지 않는다.
+    var react = e.target.closest("[data-react]");
+    if (react) {
+      game.toggleReaction(react.dataset.reactId, react.dataset.react);
+      save(game.getState());
+      refresh();
+      return;
+    }
     var account = e.target.closest("[data-account]");
     if (account) {
       closePopovers();
