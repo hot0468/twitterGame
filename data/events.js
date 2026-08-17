@@ -3,25 +3,25 @@ GAME_DATA.events = [
   { id: "viral_humor",
     trigger: { "유머": ">=15", chance: 0.25 },
     stages: [
-      { feed: ["어제는 내 유머 포스팅이 트렌드 1위에 올랐다!"],
+      { feed: ["어젯밤 내 유머 트윗이 알고리즘을 타고 퍼지기 시작했다!"],
         choices: [
-          { label: "겸손하게 감사 인사하기", effects: { "팔로워": 300, "글빨": 1 }, next: "end" },
-          { label: "계속 유머 포스팅 밀어붙이기", effects: { "팔로워": "유머*30", "논란성": 3 }, next: "end" }
+          { label: "겸손하게 감사 트윗", effects: { "팔로워": 300, "글빨": 1 }, next: "end" },
+          { label: "후속 드립 연달아 투척", effects: { "팔로워": "유머*30", "논란성": 3 }, next: "end" }
         ] }
     ] },
   { id: "backlash",
     trigger: { "논란성": ">=20", chance: 0.4 },
     stages: [
-      { feed: ["비평가 불사자(@fire_starter)가 내 포스팅을 비판하며 \"이건 그냥 멍청한 짓\"이라고 댓글 달았다"],
+      { feed: ["빅계정 불씨(@fire_starter)가 내 트윗을 인용하며 저격했다: \"이 사람 말 다 틀렸음\""],
         choices: [
-          { label: "선처 요청하기", effects: { "팔로워": -200, "멘탈": -10, "논란성": -10 }, next: "end" },
-          { label: "보상 리플 달기", requires: { "멘탈": 30 }, effects: { "논란성": 10, "멘탈": -5 }, next: 1 },
-          { label: "무시하기", effects: { "팔로워": -50, "논란성": -5 }, next: "end" }
+          { label: "사과문 올리기", effects: { "팔로워": -200, "멘탈": -10, "논란성": -10 }, next: "end" },
+          { label: "맞받아치기", requires: { "멘탈": 30 }, effects: { "논란성": 10, "멘탈": -5 }, next: 1 },
+          { label: "무시한다", effects: { "팔로워": -50, "논란성": -5 }, next: "end" }
         ] },
-      { feed: ["시간이 지나자 내 명확한 반박에 비평가들이 조용해졌다"],
+      { feed: ["설전이 실시간 트렌드에 올랐다. 구경꾼들이 몰려온다"],
         choices: [
-          { label: "글로 분명히 반박하기", requires: { "글빨": 15 }, effects: { "팔로워": 500, "논란성": 5 }, next: "end" },
-          { label: "감정적으로 대응", effects: { "팔로워": 200, "논란성": 20, "멘탈": -15 }, next: "end" }
+          { label: "논리로 깔끔하게 마무리", requires: { "글빨": 15 }, effects: { "팔로워": 500, "논란성": 5 }, next: "end" },
+          { label: "감정적으로 폭발", effects: { "팔로워": 200, "논란성": 20, "멘탈": -15 }, next: "end" }
         ] }
     ] }
 ];
