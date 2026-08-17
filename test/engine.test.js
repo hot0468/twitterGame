@@ -64,3 +64,36 @@ var g3 = Engine.create(loadData(), saved);
 assert.strictEqual(g3.getState().followers, 10, "저장 상태 복원");
 
 console.log("Task 2 OK");
+
+// --- Task 3: advanceTurn ---
+function fixedRng() { return 0; } // 항상 0 → 템플릿/리플 첫 항목, 확률 이벤트는 전부 발동
+var g4 = Engine.create(loadData(), null, fixedRng);
+var r = g4.advanceTurn("tweet_humor");
+assert.strictEqual(g4.getState().day, 2);
+assert.strictEqual(g4.getState().followers, 10 + (5 * 3 + 5), "유머*3+글빨 = 20 증가");
+assert.strictEqual(r.statChanges["팔로워"], 20);
+var myTweet = r.feedItems.filter(function (f) { return f.kind === "me"; })[0];
+assert.ok(myTweet, "내 트윗이 피드에 있음");
+assert.ok(myTweet.text.indexOf("{") === -1, "템플릿 빈칸이 치환됨");
+assert.ok(myTweet.likes >= 0 && myTweet.rts >= 0);
+assert.strictEqual(g4.getState().tweetLog.length, 1);
+assert.strictEqual(g4.getState().feed.length, r.feedItems.length);
+var reply = r.feedItems.filter(function (f) { return f.kind === "reply"; })[0];
+assert.ok(reply, "humor에 반응하는 NPC 리플 존재");
+assert.strictEqual(reply.author, "@meme_bot99");
+
+var g5 = Engine.create(loadData(), null, fixedRng);
+var r2 = g5.advanceTurn("train_writing");
+assert.strictEqual(g5.getState().stats.글빨, 7);
+assert.strictEqual(g5.getState().followers, 10, "자기계발은 팔로워 불변");
+assert.ok(r2.feedItems.filter(function (f) { return f.kind === "me"; }).length === 1, "자기계발도 자동 트윗");
+assert.strictEqual(r2.feedItems.filter(function (f) { return f.kind === "reply"; }).length, 0, "category 없는 행동엔 리플 없음");
+
+var g6 = Engine.create(loadData(), null, fixedRng);
+g6.getState().stats.멘탈 = 3;
+g6.getState().stats.감각 = 10;
+g6.advanceTurn("tweet_bait");
+// 주의: >= 0 로만 검사할 것 — Task 5에서 멘탈 0은 붕괴 처리로 20이 되므로 === 0 검사는 회귀로 깨진다
+assert.ok(g6.getState().stats.멘탈 >= 0, "스탯은 0 미만으로 안 떨어짐");
+
+console.log("Task 3 OK");

@@ -67,7 +67,49 @@ var Engine = (function () {
       return list;
     }
 
-    return { getState: function () { return state; }, getActions: getActions };
+    function pick(arr) { return arr[Math.floor(rand() * arr.length)]; }
+
+    function fillTemplate(text) {
+      return text.replace(/{([^}]+)}/g, function (_, key) {
+        return data.fills && data.fills[key] ? pick(data.fills[key]) : key;
+      });
+    }
+
+    function applyEffects(effects, statChanges) {
+      for (var k in effects) {
+        var delta = evalFormula(effects[k], state);
+        if (k === "팔로워") state.followers = Math.max(0, state.followers + delta);
+        else state.stats[k] = Math.max(0, (state.stats[k] || 0) + delta);
+        statChanges[k] = (statChanges[k] || 0) + delta;
+      }
+    }
+
+    function advanceTurn(actionId) {
+      var feedItems = [], statChanges = {}, triggeredEvents = [];
+
+      var action = data.actions.filter(function (a) { return a.id === actionId; })[0];
+      if (action) {
+        applyEffects(action.effects, statChanges);
+        var gain = Math.max(0, statChanges["팔로워"] || 0);
+        var tweet = {
+          author: "me", text: fillTemplate(pick(action.templates)), day: state.day,
+          likes: gain * 2 + Math.floor(rand() * 10), rts: Math.floor(gain / 2), kind: "me"
+        };
+        feedItems.push(tweet);
+        state.tweetLog.push(tweet);
+        if (action.category) {
+          data.npcs.forEach(function (npc) {
+            if (npc.reactsTo.indexOf(action.category) !== -1 && rand() < 0.6)
+              feedItems.push({ author: npc.handle, name: npc.name, text: pick(npc.replies), day: state.day, kind: "reply" });
+          });
+        }
+      }
+
+      state.feed = feedItems.concat(state.feed);
+      state.day += 1;
+      return { feedItems: feedItems, statChanges: statChanges, triggeredEvents: triggeredEvents, ending: null };
+    }
+    return { getState: function () { return state; }, getActions: getActions, advanceTurn: advanceTurn };
   }
 
   return { _utils: { compare: compare, checkCond: checkCond, evalFormula: evalFormula }, create: create };
