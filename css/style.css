@@ -109,6 +109,20 @@ body { background: var(--bg); color: var(--text); font-size: var(--fs-sm);
 .tweet.system { background: #fef8ef; border-left-color: #d99916; }
 .tweet.system .avatar { background: #fceecf; color: #b5730e; }
 
+/* ── 알림 항목 (좋아요·리트윗) ─────────────────── */
+.notif { display: flex; gap: 10px; padding: 11px 14px; border-bottom: 1px solid var(--border); }
+.notif-icon { flex-shrink: 0; padding-left: 0.4rem; }
+.notif-icon .icon { width: 1.5rem; height: 1.5rem; }
+.notif.like .notif-icon { color: #f91880; }     /* X의 좋아요 핑크 */
+.notif.retweet .notif-icon { color: #00ba7c; }  /* X의 리트윗 초록 */
+.notif-body { min-width: 0; flex: 1; }
+.notif-avatars { display: flex; gap: 4px; margin-bottom: 6px; }
+.avatar.small { width: 1.9rem; height: 1.9rem; }
+.avatar.small .icon { width: 1.2rem; height: 1.2rem; }
+.notif-line { line-height: 1.4; }
+.notif-preview { color: var(--muted); margin-top: 2px;
+  white-space: pre-wrap; word-break: break-word; }
+
 /* ── 프로필 (실제 X 프로필 구조: 배너 → 겹친 아바타 → 소개 → 탭) ── */
 .profile-banner { height: 10.5rem; background: linear-gradient(120deg, #1d9bf0, #8ed3f4 70%, #cfe9f7); }
 .profile-top { padding: 0 14px; }

@@ -118,6 +118,39 @@
       }
     }
 
+    // 트윗 반응 = 노출 → 좋아요 → 리트윗. 전부 스탯·팔로워에서 계산되고 난수는 쓰지 않는다.
+    // 실제 트위터처럼 계정이 커지면 반응률(좋아요/노출)이 아니라 절대 수치가 자란다.
+    function engagement() {
+      var s = state.stats;
+      // 노출: 팔로워가 기본, 감각이 타이밍을 잡아 알고리즘 확산을 늘린다
+      var views = Math.round(state.followers * (1 + Math.min(s.감각, 40) * 0.06));
+      // 반응률: 글빨이 올리지만 체감 감소 (0.012 → 최대 약 0.037)
+      var likes = Math.round(views * (0.012 + 0.03 * s.글빨 / (s.글빨 + 20)));
+      // 리트윗은 좋아요의 일부. 확산성은 유머가 끌어올린다
+      var rts = Math.round(likes * (0.08 + Math.min(s.유머, 40) * 0.004));
+      return { views: views, likes: likes, rts: rts };
+    }
+
+    // 좋아요·리트윗 알림에 이름을 올릴 계정을 고른다. 카테고리가 맞는 계정 우선.
+    function pickActors(category, count) {
+      var matching = data.npcs.filter(function (n) { return n.reactsTo.indexOf(category) !== -1; });
+      var pool = (matching.length ? matching : data.npcs).slice();
+      var picked = [];
+      while (picked.length < count && pool.length) {
+        picked.push(pool.splice(Math.floor(rand() * pool.length), 1)[0]);
+      }
+      return picked;
+    }
+
+    // 실제 트위터 알림 형태: 이름 1~2개 + "외 N명". total은 전체 좋아요/리트윗 수.
+    function reactionNotif(kind, category, namedCount, total, text) {
+      var actors = pickActors(category, namedCount).map(function (n) {
+        return { handle: n.handle, name: n.name };
+      });
+      return { kind: kind, actors: actors, others: total - actors.length,
+        text: text, day: state.day };
+    }
+
     function pushEventFeed(ev, stageIdx, feedItems) {
       ev.stages[stageIdx].feed.forEach(function (t) {
         feedItems.push({ author: "@world", name: "타임라인", text: t, day: state.day, kind: "event" });
@@ -149,15 +182,27 @@
           applyEffects(action.effects, statChanges);
           if (doTweet && action.tweet) {
             applyEffects(action.tweet.effects, statChanges);
-            var gain = Math.max(0, statChanges["팔로워"] || 0);
+            // 팔로워 변동이 이미 적용된 뒤에 반응을 잰다 — 새로 들어온 사람도 이 트윗을 본다
+            var eng = engagement();
             var tweet = {
               author: "me", text: fillTemplate(pick(action.tweet.templates)), day: state.day,
-              likes: gain * 2 + Math.floor(rand() * 10), rts: Math.floor(gain / 2), kind: "me"
+              likes: eng.likes, rts: eng.rts, views: eng.views, kind: "me"
             };
             feedItems.push(tweet);
             state.tweetLog.push(tweet);
+
+            // 좋아요·리트윗은 타임라인이 아니라 알림에만 뜬다 (실제 트위터와 동일)
+            if (eng.likes > 0) {
+              feedItems.push(reactionNotif("like", action.tweet.category,
+                eng.likes <= 2 ? eng.likes : 1, eng.likes, tweet.text));
+            }
+            if (eng.rts > 0) {
+              feedItems.push(reactionNotif("retweet", action.tweet.category, 1, eng.rts, tweet.text));
+            }
+
+            // 리플은 좋아요보다 훨씬 드물다 — NPC를 늘렸으므로 확률을 낮춰 균형을 맞춘다
             data.npcs.forEach(function (npc) {
-              if (npc.reactsTo.indexOf(action.tweet.category) !== -1 && rand() < 0.6)
+              if (npc.reactsTo.indexOf(action.tweet.category) !== -1 && rand() < 0.25)
                 feedItems.push({ author: npc.handle, name: npc.name, text: pick(npc.replies), day: state.day, kind: "reply" });
             });
           }

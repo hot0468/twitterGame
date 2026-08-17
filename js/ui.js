@@ -21,6 +21,10 @@ var UI = (function () {
     "논란성": { icon: "flame", tone: "hot" }
   };
 
+  // 좋아요·리트윗은 알림에만, 내 트윗·리플·이벤트는 타임라인에도 뜬다
+  var TIMELINE_KINDS = ["me", "reply", "event", "system"];
+  var NOTIF_KINDS = ["like", "retweet", "reply", "event", "system"];
+
   function avatarIcon(item) {
     if (item.author === "me") return "circle-user";
     if (item.kind === "event") return "globe";
@@ -34,8 +38,9 @@ var UI = (function () {
     var who = item.author === "me" ? "나" : (item.name || item.author);
     var handle = item.author === "me" ? "@me" : item.author;
     var metrics = item.kind === "me"
-      ? '<span class="metric">' + Icons.svg("heart") + (item.likes || 0) + "</span>" +
-        '<span class="metric">' + Icons.svg("repeat-2") + (item.rts || 0) + "</span>"
+      ? '<span class="metric">' + Icons.svg("heart") + (item.likes || 0).toLocaleString() + "</span>" +
+        '<span class="metric">' + Icons.svg("repeat-2") + (item.rts || 0).toLocaleString() + "</span>" +
+        '<span class="metric">' + Icons.svg("chart-column") + (item.views || 0).toLocaleString() + "</span>"
       : "";
     div.innerHTML =
       '<div class="avatar">' + Icons.svg(avatarIcon(item)) + "</div>" +
@@ -47,6 +52,37 @@ var UI = (function () {
     return div;
   }
 
+  // "밈수집가 님이" / "밈수집가 님과 불씨 님이" / "밈수집가 님 외 78명이"
+  function actorPhrase(item) {
+    var names = item.actors.map(function (a) { return a.name; });
+    if (item.others > 0) return names[0] + " 님 외 " + item.others.toLocaleString() + "명이";
+    if (names.length > 1) return names[0] + " 님과 " + names[1] + " 님이";
+    return names[0] + " 님이";
+  }
+
+  function reactionEl(item) {
+    var div = document.createElement("div");
+    div.className = "notif " + item.kind;
+    var avatars = item.actors.map(function () {
+      return '<div class="avatar small">' + Icons.svg("circle-user") + "</div>";
+    }).join("");
+    div.innerHTML =
+      '<div class="notif-icon">' + Icons.svg(item.kind === "like" ? "heart" : "repeat-2") + "</div>" +
+      '<div class="notif-body"><div class="notif-avatars">' + avatars + "</div>" +
+      '<div class="notif-line"><b class="who"></b><span class="verb"></span></div>' +
+      '<div class="notif-preview"></div></div>';
+    div.querySelector(".who").textContent = actorPhrase(item);
+    div.querySelector(".verb").textContent =
+      (item.kind === "like" ? " 내 게시물을 마음에 들어 합니다" : " 내 게시물을 재게시했습니다") +
+      " · " + item.day + "일차";
+    div.querySelector(".notif-preview").textContent = item.text;
+    return div;
+  }
+
+  function feedItemEl(item) {
+    return item.kind === "like" || item.kind === "retweet" ? reactionEl(item) : tweetEl(item);
+  }
+
   function renderFeed(el, items, emptyText) {
     el.innerHTML = "";
     if (!items.length) {
@@ -56,7 +92,7 @@ var UI = (function () {
       el.appendChild(empty);
       return;
     }
-    items.forEach(function (it) { el.appendChild(tweetEl(it)); });
+    items.forEach(function (it) { el.appendChild(feedItemEl(it)); });
   }
 
   var profileTab = "posts";
@@ -83,7 +119,8 @@ var UI = (function () {
   function renderAll(state) {
     $("day").textContent = state.day + "일차 · " + dateLabel(state.day);
     $("followers").textContent = "팔로워 " + state.followers.toLocaleString();
-    renderFeed($("feed"), state.feed, "타임라인이 조용합니다. 첫 트윗을 써보세요.");
+    var timeline = state.feed.filter(function (f) { return TIMELINE_KINDS.indexOf(f.kind) !== -1; });
+    renderFeed($("feed"), timeline, "타임라인이 조용합니다. 첫 트윗을 써보세요.");
     renderProfile(state);
     // 마운트 지점이 둘(데스크톱=사이드바, 모바일=상단 스트립) — CSS가 하나만 보여준다
     document.querySelectorAll("[data-stats]").forEach(function (panel) {
@@ -99,7 +136,7 @@ var UI = (function () {
         panel.appendChild(row);
       });
     });
-    var notifItems = state.feed.filter(function (f) { return f.kind === "event" || f.kind === "system" || f.kind === "reply"; });
+    var notifItems = state.feed.filter(function (f) { return NOTIF_KINDS.indexOf(f.kind) !== -1; });
     renderFeed($("notif-list"), notifItems, "아직 알림이 없습니다.");
     var badge = $("notif-badge");
     var pending = state.activeEvents.length;

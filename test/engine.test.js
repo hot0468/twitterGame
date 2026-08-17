@@ -88,12 +88,50 @@ assert.strictEqual(r.statChanges["팔로워"], 26);
 var myTweet = r.feedItems.filter(function (f) { return f.kind === "me"; })[0];
 assert.ok(myTweet, "내 트윗이 피드에 있음");
 assert.ok(myTweet.text.indexOf("{") === -1, "템플릿 빈칸이 치환됨");
-assert.ok(myTweet.likes >= 0 && myTweet.rts >= 0);
 assert.strictEqual(g4.getState().tweetLog.length, 1);
 assert.strictEqual(g4.getState().feed.length, r.feedItems.length);
 var reply = r.feedItems.filter(function (f) { return f.kind === "reply"; })[0];
 assert.ok(reply, "humor에 반응하는 NPC 리플 존재");
 assert.strictEqual(reply.author, "@meme_bot99");
+
+// 반응(노출·좋아요·리트윗)은 난수가 아니라 스탯·팔로워에서 결정된다
+function tweetOnce(overrides) {
+  var a = Engine.create(loadData(), null, fixedRng);
+  Object.assign(a.getState().stats, overrides || {});
+  return a.advanceTurn("meme", true).feedItems.filter(function (f) { return f.kind === "me"; })[0];
+}
+var base = tweetOnce();
+assert.deepStrictEqual(tweetOnce(), { author: base.author, text: base.text, day: base.day,
+  likes: base.likes, rts: base.rts, views: base.views, kind: "me" }, "같은 조건이면 같은 반응 (난수 없음)");
+assert.ok(tweetOnce({ 글빨: 30 }).likes > base.likes, "글빨이 높으면 좋아요가 늘어난다");
+assert.ok(tweetOnce({ 감각: 30 }).views > base.views, "감각이 높으면 노출이 늘어난다");
+var humorous = tweetOnce({ 유머: 35 });
+assert.ok(humorous.rts / humorous.likes > base.rts / base.likes, "유머가 높으면 리트윗 비율이 오른다");
+assert.ok(base.rts <= base.likes, "리트윗은 좋아요를 넘지 않는다");
+
+// 팔로워가 많아지면 절대 수치는 커지되 반응률(좋아요/노출)은 스탯이 결정한다
+var gBig = Engine.create(loadData(), null, fixedRng);
+gBig.getState().followers = 8000;
+var bigTweet = gBig.advanceTurn("meme", true).feedItems.filter(function (f) { return f.kind === "me"; })[0];
+assert.ok(bigTweet.likes > base.likes * 50, "팔로워 8000이면 좋아요가 훨씬 많다: " + bigTweet.likes);
+
+// 좋아요·리트윗은 알림 항목으로 남고, 타임라인 트윗이 아니다
+var likeNotif = gBig.getState().feed.filter(function (f) { return f.kind === "like"; })[0];
+var rtNotif = gBig.getState().feed.filter(function (f) { return f.kind === "retweet"; })[0];
+assert.ok(likeNotif, "좋아요 알림이 생성됨");
+assert.ok(rtNotif, "리트윗 알림이 생성됨");
+assert.ok(likeNotif.actors.length >= 1 && likeNotif.actors.length <= 2, "이름은 1~2명만 표기");
+assert.strictEqual(likeNotif.actors.length + likeNotif.others, bigTweet.likes,
+  "이름 수 + 외 N명 = 실제 좋아요 수");
+assert.strictEqual(rtNotif.actors.length + rtNotif.others, bigTweet.rts);
+assert.strictEqual(likeNotif.text, bigTweet.text, "알림에 원본 트윗 내용이 붙는다");
+assert.ok(likeNotif.actors[0].name && likeNotif.actors[0].handle, "알림 배우에 이름·핸들이 있다");
+
+// 트윗을 안 하면 반응 알림도 없다
+var gNoTweet = Engine.create(loadData(), null, fixedRng);
+gNoTweet.getState().followers = 8000;
+assert.strictEqual(gNoTweet.advanceTurn("meme", false).feedItems.length, 0,
+  "트윗 안 하면 좋아요·리트윗 알림도 안 생긴다");
 
 // 트윗을 안 하면: 행동 효과만, 피드는 그대로
 var g5 = Engine.create(loadData(), null, fixedRng);
