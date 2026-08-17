@@ -140,6 +140,22 @@
     // 뜨면 안 된다. feed.length는 알림 종류만 센 게 아니라 넉넉하지만 안 읽은 수는 0으로 잘려 안전하다.
     if (missing.notifSeen) state.notifSeen = state.feed.length;
 
+    // 새 계정이어도 첫 화면이 빈 타임라인이면 안 된다. 가입할 때 몇 계정을 팔로우한 셈으로
+    // 시작하고(발견일 = 1일차), 그들의 최근 트윗을 첫 타임라인에 깔아준다.
+    // 새 게임에서만 — 세이브를 이어받을 때 하면 옛 타임라인 위에 덧칠하게 된다.
+    if (!saved && genRules()) {
+      var tl = data.timeline;
+      var opening = [];
+      drawFrom(genAccounts(), tl.startFollowing || 0).forEach(function (npc) {
+        state.npcSeen[npc.handle] = state.day;
+        ensureBox(npc);
+        // 보관함은 과거→최신 순이라 뒤에서 잘라야 "최근" 트윗이 나온다
+        opening = opening.concat(state.npcTweets[npc.handle].slice(-(tl.openingTweets || 0)));
+      });
+      opening.sort(function (a, b) { return b.day - a.day; }); // feed는 최신순
+      state.feed = opening;
+    }
+
     function getActions() {
       var list = [];
       state.activeEvents.forEach(function (ae) {
@@ -267,6 +283,14 @@
       return data.npcs.filter(function (n) { return n.tweetGen && n.tweetGen.fragments; });
     }
 
+    // 보관함이 없으면 "발견 전 과거 트윗"으로 채운다. 발견한 날 직전 seed일치가 깔린다.
+    // 이 트윗들은 feed에 넣지 않는다 — 홈 타임라인이 한 번에 20개로 도배되면 안 된다.
+    function ensureBox(npc) {
+      if (state.npcTweets[npc.handle]) return;
+      var gen = genRules(), seenDay = state.npcSeen[npc.handle];
+      addTweets(npc, gen.seed, function (i) { return seenDay - gen.seed + i; });
+    }
+
     // count개를 만들어 보관함에 넣고 방금 넣은 것만 돌려준다.
     // dayOf(i)로 날짜를 받는 이유: 과거 20개는 날짜가 하루씩 다르고, 오늘 몫은 전부 오늘이다.
     function addTweets(npc, count, dayOf) {
@@ -364,11 +388,7 @@
         var today = {};
         var live = genAccounts().filter(function (n) { return state.npcSeen[n.handle] != null; });
         live.forEach(function (npc) {
-          if (!state.npcTweets[npc.handle]) {
-            // 발견 전의 과거 트윗. 보관함에만 넣는다 — 홈 타임라인이 한 번에 20개로 도배되면 안 된다.
-            var seenDay = state.npcSeen[npc.handle];
-            addTweets(npc, gen.seed, function (i) { return seenDay - gen.seed + i; });
-          }
+          ensureBox(npc);
           today[npc.handle] = addTweets(npc, gen.perDay, function () { return state.day; });
         });
         // drawFrom으로 뽑으므로 같은 계정이 하루에 두 번 타임라인에 뜨지 않는다

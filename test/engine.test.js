@@ -115,6 +115,18 @@ console.log("Task 2 OK");
 // --- Task 3: advanceTurn(actionId, doTweet) ---
 function fixedRng() { return 0; } // 항상 0 → 템플릿/리플 첫 항목, 확률 이벤트는 전부 발동
 
+// 새 게임은 팔로우 계정 몇 곳의 최근 트윗이 타임라인에 미리 깔린다(첫 화면이 비면 안 된다).
+var TLC = loadData().timeline;
+var openingCount = TLC.startFollowing * TLC.openingTweets;
+
+// 보관함 자체를 보는 테스트는 이 미리 깔기를 끄고 본다 — 안 그러면 어느 계정이 뽑히는지에 흔들린다
+function loadSolo() {
+  var d = loadData();
+  d.timeline = JSON.parse(JSON.stringify(d.timeline));
+  d.timeline.startFollowing = 0;
+  return d;
+}
+
 // 트윗을 택하면: 행동 효과 + 트윗 효과 둘 다 + 피드에 트윗/리플
 var g4 = Engine.create(loadData(), null, fixedRng);
 var r = g4.advanceTurn("meme", true);
@@ -126,7 +138,9 @@ var myTweet = r.feedItems.filter(function (f) { return f.kind === "me"; })[0];
 assert.ok(myTweet, "내 트윗이 피드에 있음");
 assert.ok(myTweet.text.indexOf("{") === -1, "템플릿 빈칸이 치환됨");
 assert.strictEqual(g4.getState().tweetLog.length, 1);
-assert.strictEqual(g4.getState().feed.length, r.feedItems.length);
+// 새 게임은 팔로우 계정의 최근 트윗이 이미 깔려 있으므로 "늘어난 만큼"으로 재야 한다
+assert.strictEqual(g4.getState().feed.length, openingCount + r.feedItems.length,
+  "이번 턴에 나온 항목이 전부 피드에 들어간다");
 assert.ok(/^tw\d+$/.test(myTweet.id), "트윗에 id가 붙는다: " + myTweet.id);
 // 팔로워 36명 계정의 첫 트윗은 좋아요 2개 → 답글 0개 (실제 트위터도 이 규모면 답글이 안 달린다)
 assert.strictEqual(r.feedItems.filter(function (f) { return f.kind === "reply"; }).length, 0,
@@ -521,7 +535,7 @@ assert.ok(longTweet.length <= GEN.maxLength, "목표를 넘지 않는다: " + lo
 assert.ok(sentences > 1, "긴 목표는 문장 여러 개로 채운다");
 
 // 보관함은 "발견한 날"부터 자란다 — 만나기 전엔 아무것도 없다
-var gBox = Engine.create(loadData(), null, function () { return 0.99; }); // 이벤트 미발동
+var gBox = Engine.create(loadSolo(), null, function () { return 0.99; }); // 이벤트 미발동
 assert.deepStrictEqual(gBox.getState().npcTweets, {}, "시작 시엔 보관함이 비어 있다");
 assert.deepStrictEqual(gBox.getState().npcSeen, {}, "시작 시엔 발견 기록도 없다");
 
@@ -565,8 +579,8 @@ assert.ok(new Set(lateLengths).size > 10,
 // 실제 게임에서 나온 트윗도 전부 10~140자 안에 있어야 한다.
 // composeTweet만 직접 재면 {떡밥} 치환을 못 잡는다 — 4자 자리표시자가 9자로 늘어나
 // 조합 후에 치환하면 140자를 뚫는다(실제로 145자가 나왔다).
-var gLen = Engine.create(loadData(), null, function () { return 0.5; });
-loadData().npcs.forEach(function (n) { gLen.getState().npcSeen[n.handle] = 1; });
+var gLen = Engine.create(loadSolo(), null, function () { return 0.5; });
+loadSolo().npcs.forEach(function (n) { gLen.getState().npcSeen[n.handle] = 1; });
 for (var t3 = 0; t3 < 12; t3++) gLen.advanceTurn("meme", true);
 var allGen = [];
 Object.keys(gLen.getState().npcTweets).forEach(function (h) {
@@ -582,8 +596,35 @@ allGen.forEach(function (t) {
 assert.strictEqual(new Set(allGen.map(function (t) { return t.id; })).size, allGen.length,
   "트윗 id가 중복되지 않는다");
 
+// 첫 화면이 빈 타임라인이면 안 된다 — 가입할 때 팔로우한 계정들의 최근 트윗이 깔려 있어야 한다
+var gNew = Engine.create(loadData(), null, function () { return 0.5; });
+var nst = gNew.getState();
+assert.strictEqual(nst.feed.length, openingCount,
+  "첫 타임라인에 " + openingCount + "개가 깔린다 (실제 " + nst.feed.length + ")");
+assert.ok(nst.feed.length > 0, "첫 화면이 비어 있으면 안 된다");
+assert.strictEqual(Object.keys(nst.npcSeen).length, TLC.startFollowing,
+  "가입 시 " + TLC.startFollowing + "계정을 팔로우한 상태로 시작한다");
+nst.feed.forEach(function (f) {
+  assert.strictEqual(f.kind, "npc", "첫 타임라인은 남의 트윗만 (내 트윗은 아직 없다)");
+  assert.ok(f.day < 1, "내가 가입하기 전(1일차 이전) 트윗이다: " + f.day + "일");
+  assert.ok(f.id, "상세로 열 수 있어야 한다");
+});
+// 최신순으로 정렬돼 있어야 한다
+for (var v = 1; v < nst.feed.length; v++) {
+  assert.ok(nst.feed[v - 1].day >= nst.feed[v].day, "첫 타임라인이 최신순이 아니다");
+}
+// 알림은 비어 있어야 한다 — 남의 트윗은 알림이 아니므로 시작부터 뱃지가 뜨면 안 된다
+var NOTIF = ["like", "retweet", "follow", "reply", "event", "system", "settlement"];
+assert.strictEqual(nst.feed.filter(function (f) { return NOTIF.indexOf(f.kind) !== -1; }).length, 0,
+  "시작부터 안 읽은 알림이 있으면 안 된다");
+// 이어받은 세이브에는 덧칠하지 않는다
+var carried = JSON.parse(JSON.stringify(nst));
+var feedBefore = carried.feed.length;
+assert.strictEqual(Engine.create(loadData(), carried).getState().feed.length, feedBefore,
+  "세이브를 이어받을 때 첫 타임라인을 다시 깔면 안 된다");
+
 // 만나지 않은 계정은 계속 조용하다
-var gQuiet = Engine.create(loadData(), null, function () { return 0.99; });
+var gQuiet = Engine.create(loadSolo(), null, function () { return 0.99; });
 gQuiet.advanceTurn("rest", false);
 gQuiet.advanceTurn("rest", false);
 assert.strictEqual(gQuiet.getState().npcTweets[genNpc.handle], undefined,
