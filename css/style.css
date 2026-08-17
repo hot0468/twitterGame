@@ -108,8 +108,12 @@ body { background: var(--bg); color: var(--text); font-size: var(--fs-sm);
   border-bottom: 1px solid var(--border); cursor: pointer; }
 .compose:hover { background: var(--hover); }
 .compose-hint { color: var(--muted); font-size: var(--fs-lg); align-self: center; }
+/* overflow: hidden 필수 — 프로필 사진(정사각 svg)을 원형으로 잘라준다 */
 .avatar { width: 2.6rem; height: 2.6rem; border-radius: 50%; background: var(--border);
-  color: var(--muted); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  color: var(--muted); display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; overflow: hidden; }
+/* 계정 프로필 사진. 배경색은 svg 안에 들어 있어 계정마다 다르다 */
+.pfp { width: 100%; height: 100%; object-fit: cover; display: block; }
 .avatar .icon { width: 1.7rem; height: 1.7rem; }
 
 .action-list { max-height: 52vh; overflow-y: auto; }

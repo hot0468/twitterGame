@@ -34,7 +34,8 @@ var UI = (function () {
 
   // 실제 트위터처럼 답글은 홈 타임라인에 안 뜬다 — 알림에서 보거나 트윗 상세로 들어가야 한다
   // 정산은 주 1회뿐이고 이 게임의 심장이라 타임라인·알림 양쪽에 남긴다
-  var TIMELINE_KINDS = ["me", "event", "system", "settlement"];
+  // npc = 팔로잉 계정들의 전용 트윗. 타임라인에만 흐르고 알림엔 안 뜬다(남의 트윗이니까)
+  var TIMELINE_KINDS = ["me", "npc", "event", "system", "settlement"];
   var NOTIF_KINDS = ["like", "retweet", "follow", "reply", "event", "system", "settlement"];
 
   function notifItemsOf(state) {
@@ -49,11 +50,18 @@ var UI = (function () {
   // 알림 화면을 열면 읽은 것으로 처리한다. 저장은 호출한 쪽(main.js)이 한다.
   function markNotifsRead(state) { state.notifSeen = notifItemsOf(state).length; }
 
-  function avatarIcon(item) {
-    if (item.author === "me") return "circle-user";
-    if (item.kind === "event") return "globe";
-    if (item.kind === "system") return "triangle-alert";
-    return "circle-user"; // 답글은 사람이 쓴 것 — 알림 아바타와 같은 아이콘
+  // 프로필 사진. 경로는 핸들에서 바로 나오므로 데이터에 파일명을 또 적지 않는다.
+  // (@meme_bot99 → assets/avatars/meme_bot99.svg, 나 → me.svg)
+  function pfp(handle) {
+    return '<img class="pfp" alt="" src="assets/avatars/' +
+      (handle === "me" ? "me" : String(handle).replace("@", "")) + '.svg">';
+  }
+
+  // 계정(나·NPC)은 프로필 사진, 이벤트·시스템은 계정이 아니라서 아이콘을 쓴다
+  function avatarInner(item) {
+    if (item.kind === "event") return Icons.svg("globe");
+    if (item.kind === "system") return Icons.svg("triangle-alert");
+    return pfp(item.author);
   }
 
   // data-value에 최종 수치를 남긴다 — 카운트업이 textContent를 덮어써도 목표치를 잃지 않는다
@@ -79,7 +87,7 @@ var UI = (function () {
       ? metricEl("heart", item.likes) + metricEl("repeat-2", item.rts) + metricEl("chart-column", item.views)
       : "";
     div.innerHTML =
-      '<div class="avatar">' + Icons.svg(avatarIcon(item)) + "</div>" +
+      '<div class="avatar">' + avatarInner(item) + "</div>" +
       '<div class="body"><span class="who"></span> <span class="handle"></span>' +
       '<div class="text"></div><div class="meta"><span>' + shortDate(item.day) + "</span>" + metrics + "</div></div>";
     div.querySelector(".who").textContent = who;
@@ -107,8 +115,9 @@ var UI = (function () {
     var r = REACTIONS[item.kind];
     var div = document.createElement("div");
     div.className = "notif " + item.kind;
-    var avatars = item.actors.map(function () {
-      return '<div class="avatar small">' + Icons.svg("circle-user") + "</div>";
+    // 알림에도 실제 그 계정의 프로필 사진을 쓴다 — 누가 눌렀는지 얼굴로 보인다
+    var avatars = item.actors.map(function (a) {
+      return '<div class="avatar small">' + pfp(a.handle) + "</div>";
     }).join("");
     div.innerHTML =
       '<div class="notif-icon">' + Icons.svg(r.icon) + "</div>" +

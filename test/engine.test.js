@@ -178,8 +178,9 @@ assert.strictEqual(gPromo.advanceTurn("promo", false).feedItems.filter(function 
 }).length, 1, "홍보로 산 팔로워도 알림에 뜬다");
 // 팔로워가 안 늘면 알림도 없다
 var gFlat = Engine.create(loadData(), null, fixedRng);
-assert.strictEqual(gFlat.advanceTurn("write", false).feedItems.length, 0,
-  "팔로워 변동이 없으면 팔로우 알림도 없다");
+assert.strictEqual(gFlat.advanceTurn("write", false).feedItems.filter(function (f) {
+  return f.kind === "follow";
+}).length, 0, "팔로워 변동이 없으면 팔로우 알림도 없다");
 
 // 답글은 규모가 커지면 줄줄이 달리고, 전부 원본 트윗을 가리킨다 (상세 페이지의 근거)
 var npcCount = loadData().npcs.length;
@@ -209,8 +210,9 @@ ids.forEach(function (id) {
 // 트윗을 안 하면 반응 알림도 없다
 var gNoTweet = Engine.create(loadData(), null, fixedRng);
 gNoTweet.getState().followers = 8000;
-assert.strictEqual(gNoTweet.advanceTurn("meme", false).feedItems.length, 0,
-  "트윗 안 하면 좋아요·리트윗 알림도 안 생긴다");
+assert.strictEqual(gNoTweet.advanceTurn("meme", false).feedItems.filter(function (f) {
+  return f.kind === "like" || f.kind === "retweet";
+}).length, 0, "트윗 안 하면 좋아요·리트윗 알림도 안 생긴다");
 
 // 트윗을 안 하면: 행동 효과만, 피드는 그대로
 var g5 = Engine.create(loadData(), null, fixedRng);
@@ -218,7 +220,9 @@ var r2 = g5.advanceTurn("meme", false);
 assert.strictEqual(g5.getState().day, 2, "트윗 안 해도 하루는 지난다");
 assert.strictEqual(g5.getState().stats.유머, 7, "행동 효과는 트윗 여부와 무관");
 assert.strictEqual(g5.getState().followers, 10, "트윗 안 하면 팔로워 불변");
-assert.strictEqual(r2.feedItems.length, 0, "트윗 안 하면 피드에 아무것도 안 남는다");
+assert.strictEqual(r2.feedItems.filter(function (f) {
+  return f.kind !== "npc";
+}).length, 0, "트윗 안 하면 내 흔적은 피드에 안 남는다 (NPC 트윗은 계속 흐른다)");
 assert.strictEqual(g5.getState().tweetLog.length, 0);
 
 // 리스크는 트윗 쪽에만 있다 (떡밥: 논란성 +5, 멘탈 -5)

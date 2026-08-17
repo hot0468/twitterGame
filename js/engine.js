@@ -281,6 +281,15 @@
         }
       }
 
+      // 팔로잉 타임라인: NPC 계정들이 자기 전용 트윗을 올린다. 내 행동과 무관하게 흐른다.
+      // drawFrom으로 뽑으므로 같은 계정이 하루에 두 번 올리지 않는다.
+      var perDay = (data.timeline && data.timeline.npcTweetsPerDay) || 0;
+      drawFrom(data.npcs.filter(function (n) { return n.tweets && n.tweets.length; }), perDay)
+        .forEach(function (npc) {
+          feedItems.push({ author: npc.handle, name: npc.name, kind: "npc",
+            text: fillTemplate(pick(npc.tweets)), day: state.day });
+        });
+
       // 팔로워가 늘면 알림에도 뜬다. 트윗·홍보·이벤트 어디서 늘어도 여기 한 곳을 지난다.
       // (tweetCategory가 null이면 pickActors가 아무 NPC나 뽑는다 — 홍보·이벤트 유입)
       var gained = statChanges["팔로워"] || 0;
