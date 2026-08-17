@@ -52,9 +52,29 @@ var UI = (function () {
 
   // 프로필 사진. 경로는 핸들에서 바로 나오므로 데이터에 파일명을 또 적지 않는다.
   // (@meme_bot99 → assets/avatars/meme_bot99.svg, 나 → me.svg)
+  function pfpSrc(handle) {
+    return "assets/avatars/" +
+      (handle === "me" || handle === "@me" ? "me" : String(handle).replace("@", "")) + ".svg";
+  }
+
   function pfp(handle) {
-    return '<img class="pfp" alt="" src="assets/avatars/' +
-      (handle === "me" ? "me" : String(handle).replace("@", "")) + '.svg">';
+    return '<img class="pfp" alt="" src="' + pfpSrc(handle) + '">';
+  }
+
+  // 아바타를 누르면 그 계정 프로필로 간다. data-account를 클릭 위임이 읽는다(main.js).
+  // 이벤트·시스템 항목은 계정이 아니라서 붙이지 않는다.
+  function avatarAttr(item) {
+    return item.kind === "event" || item.kind === "system"
+      ? "" : ' data-account="' + item.author + '"';
+  }
+
+  // 플레이어 계정. NPC와 같은 모양으로 두면 renderProfile이 둘을 같은 코드로 그린다.
+  var ME = { name: "나", handle: "@me",
+    bio: "트위터에서 뭐라도 되어보려는 사람.\n오늘도 타임라인에 글을 하나 던집니다." };
+
+  function npcByHandle(handle) {
+    var list = (typeof GAME_DATA !== "undefined" && GAME_DATA.npcs) || [];
+    return list.filter(function (n) { return n.handle === handle; })[0] || null;
   }
 
   // 계정(나·NPC)은 프로필 사진, 이벤트·시스템은 계정이 아니라서 아이콘을 쓴다
@@ -87,7 +107,7 @@ var UI = (function () {
       ? metricEl("heart", item.likes) + metricEl("repeat-2", item.rts) + metricEl("chart-column", item.views)
       : "";
     div.innerHTML =
-      '<div class="avatar">' + avatarInner(item) + "</div>" +
+      '<div class="avatar"' + avatarAttr(item) + ">" + avatarInner(item) + "</div>" +
       '<div class="body"><span class="who"></span> <span class="handle"></span>' +
       '<div class="text"></div><div class="meta"><span>' + shortDate(item.day) + "</span>" + metrics + "</div></div>";
     div.querySelector(".who").textContent = who;
@@ -115,9 +135,9 @@ var UI = (function () {
     var r = REACTIONS[item.kind];
     var div = document.createElement("div");
     div.className = "notif " + item.kind;
-    // 알림에도 실제 그 계정의 프로필 사진을 쓴다 — 누가 눌렀는지 얼굴로 보인다
+    // 알림에도 실제 그 계정의 프로필 사진을 쓴다 — 누가 눌렀는지 얼굴로 보이고, 누르면 프로필로 간다
     var avatars = item.actors.map(function (a) {
-      return '<div class="avatar small">' + pfp(a.handle) + "</div>";
+      return '<div class="avatar small" data-account="' + a.handle + '">' + pfp(a.handle) + "</div>";
     }).join("");
     div.innerHTML =
       '<div class="notif-icon">' + Icons.svg(r.icon) + "</div>" +
@@ -241,6 +261,9 @@ var UI = (function () {
   }
 
   var profileTab = "posts";
+  // null = 내 프로필. 남의 프로필을 보는 중이면 그 계정의 핸들이 들어간다.
+  var profileHandle = null;
+  var profileReturnView = "home";
 
   function setProfileTab(name) {
     profileTab = name;
@@ -249,16 +272,58 @@ var UI = (function () {
     });
   }
 
+  // 아바타 클릭 → 그 계정 프로필. handle이 나(또는 null)면 내 프로필로 간다.
+  function openProfile(handle) {
+    var target = !handle || handle === "me" || handle === "@me" ? null : handle;
+    if (target === profileHandle && currentView === "profile") return;
+    // 상세에서 상세로 넘어갈 때 원래 돌아갈 곳을 잃지 않는다 (트윗 상세와 같은 규칙)
+    if (currentView !== "profile") profileReturnView = currentView;
+    profileHandle = target;
+    setProfileTab("posts"); // 계정을 바꾸면 탭을 처음으로 — 남의 답글 탭이 열린 채 넘어가면 헷갈린다
+    switchView("profile");
+  }
+
+  function closeProfile() {
+    profileHandle = null;
+    switchView(profileReturnView);
+  }
+
   function renderProfile(state) {
-    $("profile-since").textContent = state.day + "일차";
-    $("profile-tweet-count").textContent = state.tweetLog.length;
-    $("profile-followers").textContent = state.followers.toLocaleString();
-    if (profileTab === "posts") {
-      renderFeed($("profile-tweets"), state.tweetLog.slice().reverse(), "아직 쓴 글이 없습니다.");
-    } else {
-      var replies = state.feed.filter(function (f) { return f.kind === "reply"; });
-      renderFeed($("profile-tweets"), replies, "아직 받은 답글이 없습니다.");
+    var npc = profileHandle ? npcByHandle(profileHandle) : null;
+    var who = npc || ME;
+    var handle = npc ? npc.handle : ME.handle;
+
+    $("profile-head").classList.toggle("hidden", !npc);
+    if (npc) $("profile-head-name").textContent = npc.name;
+    $("profile-meta").classList.toggle("hidden", !!npc); // 활동 일차는 내 기록이다
+    // 남의 프로필을 보는 중엔 사이드바 '프로필'을 활성으로 두지 않는다 (실제 X와 동일)
+    if (currentView === "profile") {
+      document.querySelector('.nav-btn[data-view="profile"]').classList.toggle("active", !npc);
     }
+
+    $("profile-pfp").src = pfpSrc(handle);
+    $("profile-name").textContent = who.name;
+    $("profile-handle").textContent = handle;
+    $("profile-bio").textContent = who.bio;
+    $("profile-since").textContent = state.day + "일차";
+
+    // 남의 계정은 "내가 본 것"만 보여준다 — 타임라인에 흐른 트윗과 내게 달아준 답글.
+    var byAuthor = function (kind) {
+      return state.feed.filter(function (f) { return f.kind === kind && f.author === handle; });
+    };
+    var posts = npc ? byAuthor("npc") : state.tweetLog.slice().reverse();
+    var replies = npc ? byAuthor("reply")
+      : state.feed.filter(function (f) { return f.kind === "reply"; });
+
+    $("profile-tweet-count").textContent = posts.length.toLocaleString();
+    $("profile-followers").textContent =
+      (npc ? (npc.followers || 0) : state.followers).toLocaleString();
+
+    renderFeed($("profile-tweets"),
+      profileTab === "posts" ? posts : replies,
+      profileTab === "posts"
+        ? (npc ? "아직 이 계정의 트윗을 못 봤습니다." : "아직 쓴 글이 없습니다.")
+        : (npc ? "내 트윗에 답글을 단 적이 없습니다." : "아직 받은 답글이 없습니다."));
   }
 
   function renderAll(state) {
@@ -414,6 +479,7 @@ var UI = (function () {
     setProfileTab: setProfileTab, markNotifsRead: markNotifsRead,
     toggleStats: toggleStats, closeStats: closeStats,
     toggleAccountMenu: toggleAccountMenu, closeAccountMenu: closeAccountMenu,
-    openTweetDetail: openTweetDetail, closeTweetDetail: closeTweetDetail };
+    openTweetDetail: openTweetDetail, closeTweetDetail: closeTweetDetail,
+    openProfile: openProfile, closeProfile: closeProfile };
 })();
 if (typeof module !== "undefined") module.exports = UI;

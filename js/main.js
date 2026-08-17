@@ -62,7 +62,9 @@
 
   document.querySelectorAll(".nav-btn[data-view]").forEach(function (btn) {
     btn.onclick = function () {
-      UI.switchView(btn.dataset.view);
+      // 프로필 탭은 항상 내 프로필로 — 남의 프로필을 보다 눌렀을 때 그 계정이 남으면 안 된다
+      if (btn.dataset.view === "profile") UI.openProfile(null);
+      else UI.switchView(btn.dataset.view);
       closePopovers();
       // 알림을 열면 읽은 것으로 처리한다 — 뱃지가 사라지고 그 상태가 저장돼야 한다
       if (btn.dataset.view === "notif") {
@@ -92,8 +94,16 @@
     if (!e.target.closest(".account-menu")) UI.closeAccountMenu();
   });
 
-  // 트윗 클릭 → 상세. 위임으로 걸어야 다시 렌더된 트윗에도 계속 붙는다
+  // 트윗·아바타 클릭 → 상세/프로필. 위임으로 걸어야 다시 렌더된 항목에도 계속 붙는다.
+  // 아바타는 트윗 안에 있으므로 반드시 먼저 본다 — 안 그러면 아바타를 눌러도 트윗 상세로 새어나간다.
   document.addEventListener("click", function (e) {
+    var account = e.target.closest("[data-account]");
+    if (account) {
+      closePopovers();
+      UI.openProfile(account.dataset.account);
+      refresh();
+      return;
+    }
     var target = e.target.closest(".tweet[data-detail]");
     if (!target) return;
     closePopovers();
@@ -102,6 +112,7 @@
   });
 
   document.getElementById("detail-back").onclick = function () { UI.closeTweetDetail(); };
+  document.getElementById("profile-back").onclick = function () { UI.closeProfile(); };
 
   document.querySelectorAll(".tab-btn").forEach(function (btn) {
     btn.onclick = function () { UI.setProfileTab(btn.dataset.tab); refresh(); };

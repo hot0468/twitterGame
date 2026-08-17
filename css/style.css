@@ -114,6 +114,9 @@ body { background: var(--bg); color: var(--text); font-size: var(--fs-sm);
   flex-shrink: 0; overflow: hidden; }
 /* 계정 프로필 사진. 배경색은 svg 안에 들어 있어 계정마다 다르다 */
 .pfp { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* 아바타를 누르면 그 계정 프로필로 간다 (트윗 본문 클릭과 구분되게 커서를 준다) */
+.avatar[data-account] { cursor: pointer; }
+.avatar[data-account]:hover { opacity: 0.82; }
 .avatar .icon { width: 1.7rem; height: 1.7rem; }
 
 .action-list { max-height: 52vh; overflow-y: auto; }
@@ -195,7 +198,8 @@ body { background: var(--bg); color: var(--text); font-size: var(--fs-sm);
 .profile-info { padding: 10px 14px 14px; }
 .profile-name { font-size: var(--fs-xl); line-height: 1.2; }
 .handle { color: var(--muted); font-size: var(--fs-sm); }
-.profile-bio { margin: 10px 0; line-height: 1.45; }
+/* pre-line 필수 — 소개글의 줄바꿈(\n)을 살린다. textContent로 넣으므로 <br>는 못 쓴다 */
+.profile-bio { margin: 10px 0; line-height: 1.45; white-space: pre-line; }
 .profile-meta { display: flex; flex-wrap: wrap; gap: 14px;
   color: var(--muted); font-size: var(--fs-sm); }
 .profile-meta > span { display: flex; align-items: center; gap: 5px; }

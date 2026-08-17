@@ -31,6 +31,14 @@ var noTweets = npcs.filter(function (n) { return !n.tweets || !n.tweets.length; 
 assert.strictEqual(noTweets.length, 0,
   "전용 트윗이 없는 계정: " + noTweets.map(function (n) { return n.handle; }).join(", "));
 
+// 프로필 페이지가 채워지는지 — bio나 followers가 없으면 남의 프로필이 빈칸으로 뜬다
+var noBio = npcs.filter(function (n) { return !n.bio; });
+assert.strictEqual(noBio.length, 0,
+  "소개글(bio)이 없는 계정: " + noBio.map(function (n) { return n.handle; }).join(", "));
+var noFollowers = npcs.filter(function (n) { return typeof n.followers !== "number"; });
+assert.strictEqual(noFollowers.length, 0,
+  "팔로워 수가 없는 계정: " + noFollowers.map(function (n) { return n.handle; }).join(", "));
+
 // 같은 트윗 문구를 두 계정이 쓰면 컨셉이 겹친 것 — 계정별 전용이 아니게 된다
 var seen = {}, dup = [];
 npcs.forEach(function (n) {
