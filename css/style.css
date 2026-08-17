@@ -68,8 +68,9 @@ body { background: var(--bg); color: var(--text); font-size: var(--fs-sm);
 .stat-row.tone-calm .icon { color: #12a594; }
 .stat-row.tone-hot .icon { color: #e5484d; }
 
-/* 모바일용 스탯 스트립 — 기본은 숨김, 640px 이하에서만 쓴다 */
+/* 모바일 스탯 팝오버와 그 토글 버튼 — 데스크톱은 사이드바에 스탯이 상주하므로 둘 다 숨김 */
 .stats-strip { display: none; }
+.stats-toggle { display: none; }
 
 .new-game { display: flex; align-items: center; justify-content: center; gap: 6px;
   margin-top: 9px; background: none; border: 1px solid #cfd9de; color: var(--muted);
@@ -181,13 +182,15 @@ body { background: var(--bg); color: var(--text); font-size: var(--fs-sm);
     box-shadow: 0 4px 14px rgba(29, 155, 240, 0.45); }
   .next-day .icon { width: 2rem; height: 2rem; }
 
-  /* 스탯 → 타임라인 위 칩 스트립 (하단 탭바로 옮긴 사이드바 자리를 대신함) */
+  /* 스탯 → 독바의 스탯 버튼을 누르면 뜨는 팝오버 (독바 위에 카드로) */
   .stats-panel { display: none; }
-  .stats-strip { display: flex; flex-wrap: wrap; gap: 5px; padding: 8px 10px;
-    border-bottom: 1px solid var(--border); }
-  .stats-strip .stat-row { flex: 0 0 auto; gap: 5px; padding: 4px 9px;
-    background: var(--hover); border: 1px solid var(--border); border-radius: 999px; }
-  .stats-strip .stat-name .icon { width: 1.2rem; height: 1.2rem; }
+  .stats-toggle { display: flex; }
+  .stats-strip.open { display: flex; flex-direction: column; gap: 1px;
+    position: fixed; left: 8px; right: 8px; bottom: 4.9rem; z-index: 22;
+    padding: 7px; background: var(--bg);
+    border: 1px solid var(--border); border-radius: 14px;
+    box-shadow: 0 8px 28px rgba(15, 20, 25, 0.22); }
+  .stats-strip .stat-row { padding: 7px 11px; }
 
   .profile-banner { height: 8rem; }
   .compose-hint { font-size: var(--fs-base); }

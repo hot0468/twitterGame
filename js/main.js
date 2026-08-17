@@ -38,8 +38,18 @@
     refresh();
   };
 
-  document.querySelectorAll(".nav-btn").forEach(function (btn) {
-    btn.onclick = function () { UI.switchView(btn.dataset.view); };
+  document.querySelectorAll(".nav-btn[data-view]").forEach(function (btn) {
+    btn.onclick = function () { UI.switchView(btn.dataset.view); UI.closeStats(); };
+  });
+
+  document.getElementById("stats-toggle").onclick = function (e) {
+    e.stopPropagation();
+    UI.toggleStats();
+  };
+
+  // 팝오버 밖을 누르면 닫는다 (토글 버튼 자신은 위에서 stopPropagation)
+  document.addEventListener("click", function (e) {
+    if (!e.target.closest(".stats-strip")) UI.closeStats();
   });
 
   document.querySelectorAll(".tab-btn").forEach(function (btn) {

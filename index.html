@@ -13,6 +13,8 @@
       <button class="nav-btn active" data-view="home"><span data-icon="house"></span><span class="label">홈</span></button>
       <button class="nav-btn" data-view="notif"><span data-icon="bell"></span><span class="label">알림</span><span id="notif-badge" class="badge hidden"></span></button>
       <button class="nav-btn" data-view="profile"><span data-icon="user"></span><span class="label">프로필</span></button>
+      <!-- 모바일 독바에만 보이는 스탯 팝오버 토글 (데스크톱은 사이드바에 스탯이 상주하므로 숨김) -->
+      <button id="stats-toggle" class="nav-btn stats-toggle" aria-expanded="false"><span data-icon="chart-column"></span><span class="label">스탯</span></button>
       <button id="next-day" class="next-day" disabled><span class="label">다음 날</span><span data-icon="arrow-right"></span></button>
       <div class="stats-panel" data-stats></div>
       <button id="new-game" class="new-game"><span data-icon="rotate-ccw"></span><span class="label">새 게임</span></button>

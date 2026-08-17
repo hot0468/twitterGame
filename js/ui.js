@@ -115,6 +115,19 @@ var UI = (function () {
 
   function hideActions() { $("action-list").classList.add("hidden"); }
 
+  // 모바일 스탯 팝오버. 데스크톱에선 .stats-strip이 CSS로 계속 숨겨져 있어 아무 영향 없다.
+  function setStatsOpen(open) {
+    document.querySelector(".stats-strip").classList.toggle("open", open);
+    $("stats-toggle").setAttribute("aria-expanded", String(open));
+    $("stats-toggle").classList.toggle("active", open);
+  }
+
+  function toggleStats() {
+    setStatsOpen(!document.querySelector(".stats-strip").classList.contains("open"));
+  }
+
+  function closeStats() { setStatsOpen(false); }
+
   function setTurnDone(done) {
     $("next-day").disabled = !done;
     $("compose").style.opacity = done ? "0.4" : "1";
@@ -135,13 +148,14 @@ var UI = (function () {
     ["home", "profile", "notif"].forEach(function (v) {
       document.getElementById("view-" + v).classList.toggle("hidden", v !== name);
     });
-    document.querySelectorAll(".nav-btn").forEach(function (b) {
+    // [data-view]로 한정 — 스탯 토글도 .nav-btn이지만 뷰가 없어서 여기 끼면 active가 꼬인다
+    document.querySelectorAll(".nav-btn[data-view]").forEach(function (b) {
       b.classList.toggle("active", b.dataset.view === name);
     });
   }
 
   return { renderAll: renderAll, showActions: showActions, hideActions: hideActions,
     setTurnDone: setTurnDone, showEnding: showEnding, switchView: switchView,
-    setProfileTab: setProfileTab };
+    setProfileTab: setProfileTab, toggleStats: toggleStats, closeStats: closeStats };
 })();
 if (typeof module !== "undefined") module.exports = UI;
