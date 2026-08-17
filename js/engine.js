@@ -65,25 +65,34 @@
     return Math.round(gen.minLength + (gen.maxLength - gen.minLength) * slot / (rungs - 1));
   }
 
+  // 문장을 잇는 방식. 실제 트윗은 엔터를 직접 넣어 쓰기 때문에 줄이 열 끝까지 가지 않는다.
+  // 전부 공백으로만 이으면 매 줄이 꽉 찬 벽처럼 보인다 — 그래서 줄바꿈·빈 줄을 섞는다.
+  // 첫 항목이 공백이어야 pickFn이 항상 0번을 고르는 테스트에서 한 줄 트윗이 나온다.
+  // 이음말도 길이에 포함되므로(\n은 1자, \n\n은 2자) 목표 길이를 넘지 않는다.
+  var JOINS = [" ", " ", "\n", "\n", "\n\n"];
+
   // 조각을 목표 길이에 닿을 때까지 이어 붙인다. 한 트윗에 같은 조각을 두 번 쓰지 않는다.
-  // 조각은 전부 그 자체로 완결된 문장이라 공백으로만 이으면 문장이 된다.
+  // 조각은 전부 그 자체로 완결된 문장이라 이어 붙이기만 하면 글이 된다.
   function composeTweet(fragments, target, pickFn) {
-    var rest = fragments.slice(), parts = [], len = 0;
+    var rest = fragments.slice(), out = "", len = 0, count = 0;
     while (rest.length) {
-      var gap = parts.length ? 1 : 0;             // 앞 문장과 띄울 한 칸
-      var fits = rest.filter(function (f) { return f.length <= target - len - gap; });
+      // 첫 조각엔 이음말이 없다. 이음말 길이까지 미리 빼고 남는 자리를 재야 목표를 안 넘는다.
+      var join = count ? pickFn(JOINS) : "";
+      var room = target - len - join.length;
+      var fits = rest.filter(function (f) { return f.length <= room; });
       if (!fits.length) break;
       var piece = pickFn(fits);
       rest.splice(rest.indexOf(piece), 1);
-      parts.push(piece);
-      len += piece.length + gap;
+      out += join + piece;
+      len += join.length + piece.length;
+      count++;
     }
     // 목표가 제일 짧은 조각보다도 작을 때 — 빈 트윗을 내보내지 않는다.
     // 그래서 실제 최소 길이는 "가장 짧은 조각"이 정한다. 조각을 10자 이상으로 쓰는 이유다.
-    if (!parts.length) {
-      parts.push(fragments.reduce(function (a, b) { return b.length < a.length ? b : a; }));
+    if (!count) {
+      out = fragments.reduce(function (a, b) { return b.length < a.length ? b : a; });
     }
-    return parts.join(" ");
+    return out;
   }
 
   // 돈만 마이너스를 허용한다 — 빚을 져도 능력으로 회생할 수 있어야 하고,

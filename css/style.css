@@ -29,11 +29,11 @@ body { background: var(--bg); color: var(--text); font-size: var(--fs-sm);
 /* 아이콘 크기는 주변 글씨에 비례한다 — 개별 px 지정 없음 */
 .icon { display: block; flex-shrink: 0; width: 1.35em; height: 1.35em; }
 
-/* 사이드바 13.5 + 본문 46 + 레일 21 = 80.5rem. 전부 rem이라 스케일 노브를 바꿔도 같이 움직인다.
+/* 사이드바 13.5 + 본문 38.5 + 레일 21 = 73rem. 전부 rem이라 스케일 노브를 바꿔도 같이 움직인다.
    본문 폭은 .main의 max-width가 정한다(레일이 숨는 좁은 창에서도 넓어지지 않게).
    justify-content: center — 레일이 숨어 남는 공간이 생기면 열들을 가운데로 모은다. */
 .app { display: flex; justify-content: center;
-  max-width: 80.5rem; margin: 0 auto; min-height: 100vh; }
+  max-width: 73rem; margin: 0 auto; min-height: 100vh; }
 
 /* ── 사이드바 ────────────────────────────────── */
 .sidebar { width: 13.5rem; padding: 10px 7px; border-right: 1px solid var(--border);
@@ -103,8 +103,8 @@ body { background: var(--bg); color: var(--text); font-size: var(--fs-sm);
 .menu-item:hover { background: var(--hover); }
 
 /* ── 본문 ────────────────────────────────────── */
-/* 46rem ≈ 600px. 트윗 줄 길이를 정하는 값이라 여기만 고치면 된다 */
-.main { flex: 1; max-width: 46rem; border-right: 1px solid var(--border); min-width: 0; }
+/* 38.5rem ≈ 500px. 트윗 줄 길이를 정하는 값이라 여기만 고치면 된다 */
+.main { flex: 1; max-width: 38.5rem; border-right: 1px solid var(--border); min-width: 0; }
 .topbar { display: flex; justify-content: space-between; padding: 12px 14px;
   border-bottom: 1px solid var(--border); font-weight: 700; position: sticky; top: 0;
   background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(12px); z-index: 5; }
@@ -190,8 +190,11 @@ body { background: var(--bg); color: var(--text); font-size: var(--fs-sm);
 .rail-more:hover { background: #eaf0f1; }
 .rail-empty { padding: 2px 14px 10px; color: var(--muted); font-size: var(--fs-xs); }
 
-/* 폭이 좁으면 레일을 접는다 — 본문을 눌러버리면 오히려 읽기 나빠진다 */
-@media (max-width: 1000px) {
+/* 세 열이 다 안 들어가면 레일을 접는다 — 본문을 눌러버리면 오히려 읽기 나빠진다.
+   기준은 열 합(73rem ≈ 949px)보다 살짝 위. 미디어 쿼리의 rem은 html font-size가 아니라
+   초기값 16px을 쓰므로 rem으로 쓰면 어긋난다 — 여기서만 px으로 적는다.
+   .main의 max-width를 바꾸면 이 값도 같이 봐야 한다. */
+@media (max-width: 960px) {
   .rail { display: none; }
 }
 

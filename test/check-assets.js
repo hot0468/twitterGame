@@ -62,6 +62,10 @@ npcs.forEach(function (n) {
   assert.strictEqual(long.length, 0, n.handle + ": " + gen.maxLength + "자를 넘는 조각이 있다");
 
   assert.strictEqual(new Set(frags).size, frags.length, n.handle + ": 계정 안에 중복된 조각이 있다");
+  // 줄바꿈은 엔진이 조각 "사이"에 넣는다. 조각 안에 넣으면 길이 계산과 어긋난다
+  var multiline = frags.filter(function (f) { return /[\r\n]/.test(f); });
+  assert.strictEqual(multiline.length, 0,
+    n.handle + ": 조각 안에 줄바꿈이 있다(엔진이 조각 사이에 넣는다)");
   // 조각이 적으면 긴 트윗을 채울 재료가 부족해 목표 길이에 못 닿는다
   assert.ok(frags.length >= 18, n.handle + ": 조각이 너무 적다(" + frags.length + "개, 18개 이상)");
 

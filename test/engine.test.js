@@ -528,11 +528,16 @@ lengths.forEach(function (L) {
 assert.ok(buckets.every(function (b) { return b >= 5; }),
   "길이가 한쪽으로 몰렸다 (구간별 개수: " + buckets.join("/") + ")");
 
-// 조각을 두 번 쓰지 않는다
+// 이음말이 뭐든(공백·줄바꿈·빈 줄) 목표 길이를 넘지 않고, 여러 문장으로 채운다
 var longTweet = U.composeTweet(genNpc.tweetGen.fragments, GEN.maxLength, function (a) { return a[0]; });
-var sentences = longTweet.split(" ").length;
 assert.ok(longTweet.length <= GEN.maxLength, "목표를 넘지 않는다: " + longTweet.length);
-assert.ok(sentences > 1, "긴 목표는 문장 여러 개로 채운다");
+assert.ok(longTweet.split(/\s+/).length > 1, "긴 목표는 문장 여러 개로 채운다");
+assert.ok(!/^\s|\s$/.test(longTweet), "앞뒤에 공백·줄바꿈이 남지 않는다");
+// 이음말이 길이에 포함되는지 — 빈 줄(\n\n, 2자)만 고르게 해도 목표를 넘으면 안 된다
+var breaky = U.composeTweet(genNpc.tweetGen.fragments, GEN.maxLength,
+  function (a) { return a[a.length - 1]; }); // JOINS의 마지막 = "\n\n"
+assert.ok(breaky.length <= GEN.maxLength, "빈 줄로 이어도 목표를 넘지 않는다: " + breaky.length);
+assert.ok(breaky.indexOf("\n\n") !== -1, "빈 줄로 이어진다");
 
 // 보관함은 "발견한 날"부터 자란다 — 만나기 전엔 아무것도 없다
 var gBox = Engine.create(loadSolo(), null, function () { return 0.99; }); // 이벤트 미발동
@@ -595,6 +600,12 @@ allGen.forEach(function (t) {
 });
 assert.strictEqual(new Set(allGen.map(function (t) { return t.id; })).size, allGen.length,
   "트윗 id가 중복되지 않는다");
+// 실제 트윗처럼 줄바꿈이 섞여 있어야 한다 — 전부 공백으로만 이으면 매 줄이 꽉 찬 벽이 된다
+var withBreak = allGen.filter(function (t) { return t.text.indexOf("\n") !== -1; });
+assert.ok(withBreak.length > allGen.length * 0.2,
+  "줄바꿈이 들어간 트윗이 너무 적다: " + withBreak.length + "/" + allGen.length);
+assert.strictEqual(allGen.filter(function (t) { return /^\s|\s$/.test(t.text); }).length, 0,
+  "앞뒤에 공백·줄바꿈이 남은 트윗이 있다");
 
 // 첫 화면이 빈 타임라인이면 안 된다 — 가입할 때 팔로우한 계정들의 최근 트윗이 깔려 있어야 한다
 var gNew = Engine.create(loadData(), null, function () { return 0.5; });
