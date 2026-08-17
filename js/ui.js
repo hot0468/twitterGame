@@ -7,9 +7,20 @@ var UI = (function () {
   var START = { year: 2026, monthIndex: 2, date: 2 };
   var WEEKDAY = ["일", "월", "화", "수", "목", "금", "토"];
 
+  function dayToDate(day) {
+    return new Date(START.year, START.monthIndex, START.date + (day - 1));
+  }
+
+  // 요일까지 붙는 긴 표기 — 날짜 자체가 주인공인 곳(상단바·주급날 팝업)에 쓴다
   function dateLabel(day) {
-    var d = new Date(START.year, START.monthIndex, START.date + (day - 1));
+    var d = dayToDate(day);
     return (d.getMonth() + 1) + "월 " + d.getDate() + "일 (" + WEEKDAY[d.getDay()] + ")";
+  }
+
+  // 트윗·알림의 타임스탬프. 실제 X처럼 "3월 10일"까지만 — 요일은 군더더기다
+  function shortDate(day) {
+    var d = dayToDate(day);
+    return (d.getMonth() + 1) + "월 " + d.getDate() + "일";
   }
 
   var STAT_STYLE = {
@@ -58,7 +69,7 @@ var UI = (function () {
     div.innerHTML =
       '<div class="avatar">' + Icons.svg(avatarIcon(item)) + "</div>" +
       '<div class="body"><span class="who"></span> <span class="handle"></span>' +
-      '<div class="text"></div><div class="meta"><span>' + item.day + "일차</span>" + metrics + "</div></div>";
+      '<div class="text"></div><div class="meta"><span>' + shortDate(item.day) + "</span>" + metrics + "</div></div>";
     div.querySelector(".who").textContent = who;
     div.querySelector(".handle").textContent = handle;
     div.querySelector(".text").textContent = item.text;
@@ -93,7 +104,7 @@ var UI = (function () {
       '<div class="notif-line"><b class="who"></b><span class="verb"></span></div>' +
       (item.text ? '<div class="notif-preview"></div>' : "") + "</div>";
     div.querySelector(".who").textContent = actorPhrase(item);
-    div.querySelector(".verb").textContent = r.verb + " · " + item.day + "일차";
+    div.querySelector(".verb").textContent = r.verb + " · " + shortDate(item.day);
     if (item.text) div.querySelector(".notif-preview").textContent = item.text;
     return div;
   }
@@ -108,10 +119,16 @@ var UI = (function () {
       '<div class="settle-net"></div><div class="settle-rows"></div>';
     div.querySelector(".settle-head b").textContent = "크리에이터 수익 정산";
     div.querySelector(".settle-range").textContent =
-      item.from + "~" + item.to + "일차";
+      shortDate(item.from) + " ~ " + shortDate(item.to);
     div.querySelector(".settle-net").textContent =
       (item.net >= 0 ? "+" : "-") + statValue("돈", Math.abs(item.net));
-    var rows = div.querySelector(".settle-rows");
+    fillSettleRows(div.querySelector(".settle-rows"), item);
+    return div;
+  }
+
+  // 피드 카드와 주급날 팝업이 같은 내역을 쓴다 — 한 곳에서 만들어야 숫자가 어긋나지 않는다
+  function fillSettleRows(el, item) {
+    el.innerHTML = "";
     [["주간 조회수", item.views.toLocaleString() + "회"],
      ["조회수 정산금", "+" + statValue("돈", item.payout)],
      ["프리미엄 결제료", "-" + statValue("돈", item.fee)]
@@ -121,9 +138,8 @@ var UI = (function () {
       row.innerHTML = "<span></span><b></b>";
       row.querySelector("span").textContent = r[0];
       row.querySelector("b").textContent = r[1];
-      rows.appendChild(row);
+      el.appendChild(row);
     });
-    return div;
   }
 
   function feedItemEl(item) {
@@ -302,23 +318,27 @@ var UI = (function () {
 
   function closeTweetPrompt() { $("tweet-modal").classList.add("hidden"); }
 
-  // 하루가 넘어갈 때 날짜를 띄운다. 탭하면 즉시, 아니면 1.4초 후 닫히고 onDone 호출.
-  function showDayTransition(day, onDone) {
-    var modal = $("day-modal");
-    $("day-modal-num").textContent = day + "일차";
-    $("day-modal-date").textContent = dateLabel(day);
+  // 주급날 딤팝업. 날짜 전환은 조용히 넘어가고 정산일에만 이걸 띄운다 — 주 1회뿐이라
+  // 자동으로 닫지 않는다(읽어야 하는 정보다). 확인 버튼이나 딤을 누르면 onDone.
+  function showSettlement(item, onDone) {
+    var modal = $("settle-modal");
+    modal.querySelector(".card").classList.toggle("minus", item.net < 0);
+    $("payday-range").textContent = dateLabel(item.from) + " ~ " + dateLabel(item.to);
+    $("payday-amount").textContent =
+      (item.net >= 0 ? "+" : "-") + statValue("돈", Math.abs(item.net));
+    fillSettleRows($("payday-rows"), item);
     modal.classList.remove("hidden");
     var done = false;
     function finish() {
       if (done) return;
       done = true;
-      clearTimeout(timer);
       modal.onclick = null;
+      $("payday-ok").onclick = null;
       modal.classList.add("hidden");
       if (onDone) onDone();
     }
-    var timer = setTimeout(finish, 1400);
-    modal.onclick = finish;
+    $("payday-ok").onclick = finish;
+    modal.onclick = function (e) { if (e.target === modal) finish(); };
   }
 
   // 모바일 스탯 팝오버. 데스크톱에선 .stats-strip이 CSS로 계속 숨겨져 있어 아무 영향 없다.
@@ -370,7 +390,7 @@ var UI = (function () {
 
   return { renderAll: renderAll, showActions: showActions, hideActions: hideActions,
     openTweetPrompt: openTweetPrompt, closeTweetPrompt: closeTweetPrompt,
-    showDayTransition: showDayTransition, dateLabel: dateLabel,
+    showSettlement: showSettlement, dateLabel: dateLabel,
     animateLatestMetrics: animateLatestMetrics,
     showEnding: showEnding, switchView: switchView,
     setProfileTab: setProfileTab, toggleStats: toggleStats, closeStats: closeStats,

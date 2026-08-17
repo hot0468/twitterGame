@@ -243,11 +243,21 @@ body { background: var(--bg); color: var(--text); font-size: var(--fs-sm);
 .preview-row .post { color: var(--accent); }
 .modal-actions { display: flex; gap: 8px; justify-content: center; }
 
-/* 날짜 전환 팝업 — 카드 없이 큰 글씨만 */
-.day-overlay { background: rgba(255, 255, 255, 0.92); cursor: pointer; }
-.day-card { text-align: center; }
-.day-num { font-size: var(--fs-xxl); font-weight: 700; }
-.day-date { color: var(--muted); font-size: var(--fs-md); margin-top: 4px; }
+/* 주급날 팝업 — 날짜 전환은 팝업이 없고 정산일에만 이게 뜬다 */
+.payday { text-align: left; }
+.payday-head { display: flex; align-items: center; gap: 10px; color: #15883f;
+  padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+.payday-head .icon { width: 2rem; height: 2rem; }
+.payday-head b { display: block; font-size: var(--fs-md); }
+.payday-head span span { display: block; }
+#payday-range { color: var(--muted); font-size: var(--fs-xs); font-weight: 400; }
+.payday-amount { font-size: var(--fs-xxl); font-weight: 700; color: #15883f;
+  margin: 14px 0 12px; text-align: center; font-variant-numeric: tabular-nums; }
+.payday .settle-rows { background: var(--hover); border: 1px solid var(--border);
+  border-radius: 12px; padding: 8px 12px; margin-bottom: 18px; }
+.payday .btn-primary { width: 100%; }
+/* 정산금이 요금보다 적은 주 — 색을 뒤집어 바로 알아채게 */
+.payday.minus .payday-head, .payday.minus .payday-amount { color: #e5484d; }
 
 /* ── 모바일 (실제 X 앱 구조: 하단 탭바 + 컴포즈 FAB + 전체폭 타임라인) ── */
 @media (max-width: 640px) {
@@ -276,7 +286,6 @@ body { background: var(--bg); color: var(--text); font-size: var(--fs-sm);
   /* 팝업은 화면 폭을 거의 다 쓴다 (데스크톱의 max-width 상한을 푼다) */
   .overlay { padding: 14px; align-items: flex-end; }
   .overlay .card { max-width: none; }
-  .day-overlay { align-items: center; }
   .action-list { max-height: 60vh; }
 
   /* 스탯 → 독바의 스탯 버튼을 누르면 뜨는 팝오버 (독바 위에 카드로) */

@@ -117,11 +117,19 @@
     </div>
   </div>
 
-  <!-- 날짜 전환 딤팝업 -->
-  <div id="day-modal" class="overlay day-overlay hidden">
-    <div class="day-card">
-      <div id="day-modal-num" class="day-num">1일차</div>
-      <div id="day-modal-date" class="day-date">3월 2일 (월)</div>
+  <!-- 주급날 딤팝업. 날짜 전환은 팝업 없이 조용히 넘어가고, 정산일에만 이걸 띄운다 -->
+  <div id="settle-modal" class="overlay hidden">
+    <div class="card payday">
+      <div class="payday-head">
+        <span data-icon="wallet"></span>
+        <div>
+          <b>주급날</b>
+          <span id="payday-range"></span>
+        </div>
+      </div>
+      <div id="payday-amount" class="payday-amount"></div>
+      <div id="payday-rows" class="settle-rows"></div>
+      <button id="payday-ok" class="btn-primary">확인</button>
     </div>
   </div>
 

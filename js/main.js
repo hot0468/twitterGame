@@ -16,17 +16,20 @@
 
   function refresh() { UI.renderAll(game.getState()); }
 
-  // 행동을 실제로 적용하고 하루를 넘긴다. 날짜 팝업이 닫힌 뒤 엔딩을 띄운다.
+  // 행동을 실제로 적용하고 하루를 넘긴다.
+  // 날짜 전환은 팝업 없이 조용히 넘어간다 — 주급날에만 정산 팝업을 띄우고, 닫힌 뒤 연출·엔딩.
   function resolveTurn(actionId, doTweet) {
     var result = game.advanceTurn(actionId, doTweet);
     save(game.getState());
     refresh();
-    // 트윗을 한 턴에만 카운트업 — 안 그러면 딤이 걷힐 때 지난 트윗 숫자가 다시 올라간다
+    // 트윗을 한 턴에만 카운트업 — 안 그러면 지난 트윗 숫자가 다시 올라간다
     var posted = result.feedItems.filter(function (f) { return f.kind === "me"; }).length > 0;
-    UI.showDayTransition(game.getState().day, function () {
+    function finish() {
       if (posted) UI.animateLatestMetrics();
       if (result.ending) UI.showEnding(result.ending, newGame);
-    });
+    }
+    if (result.settlement) UI.showSettlement(result.settlement, finish);
+    else finish();
   }
 
   document.getElementById("compose").onclick = function () {
