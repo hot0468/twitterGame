@@ -52,49 +52,6 @@
     return key === "팔로워" && v > 0 ? Math.round(v * morale(against.stats.멘탈)) : v;
   }
 
-  function gcd(a, b) { return b ? gcd(b, a % b) : a; }
-
-  // 생성형 계정의 트윗 목표 길이. minLength~maxLength에 "고르게" 흩어져야 하는데,
-  // 난수로 뽑으면 뭉친다(20개 뽑으면 짧은 것만 몰리는 일이 생긴다). 그래서 사다리를 놓고
-  // rungs와 서로소인 보폭으로 칸을 밟는다 — 한 바퀴(rungs개) 동안 모든 칸을 정확히 한 번 지난다.
-  function targetLength(seq, gen) {
-    var rungs = Math.max(2, gen.max);
-    var stride = 17;
-    while (gcd(stride, rungs) !== 1) stride++; // max를 바꿔도 분포가 깨지지 않게
-    var slot = ((seq % rungs) * stride) % rungs;
-    return Math.round(gen.minLength + (gen.maxLength - gen.minLength) * slot / (rungs - 1));
-  }
-
-  // 문장을 잇는 방식. 실제 트윗은 엔터를 직접 넣어 쓰기 때문에 줄이 열 끝까지 가지 않는다.
-  // 전부 공백으로만 이으면 매 줄이 꽉 찬 벽처럼 보인다 — 그래서 줄바꿈·빈 줄을 섞는다.
-  // 첫 항목이 공백이어야 pickFn이 항상 0번을 고르는 테스트에서 한 줄 트윗이 나온다.
-  // 이음말도 길이에 포함되므로(\n은 1자, \n\n은 2자) 목표 길이를 넘지 않는다.
-  var JOINS = [" ", " ", "\n", "\n", "\n\n"];
-
-  // 조각을 목표 길이에 닿을 때까지 이어 붙인다. 한 트윗에 같은 조각을 두 번 쓰지 않는다.
-  // 조각은 전부 그 자체로 완결된 문장이라 이어 붙이기만 하면 글이 된다.
-  function composeTweet(fragments, target, pickFn) {
-    var rest = fragments.slice(), out = "", len = 0, count = 0;
-    while (rest.length) {
-      // 첫 조각엔 이음말이 없다. 이음말 길이까지 미리 빼고 남는 자리를 재야 목표를 안 넘는다.
-      var join = count ? pickFn(JOINS) : "";
-      var room = target - len - join.length;
-      var fits = rest.filter(function (f) { return f.length <= room; });
-      if (!fits.length) break;
-      var piece = pickFn(fits);
-      rest.splice(rest.indexOf(piece), 1);
-      out += join + piece;
-      len += join.length + piece.length;
-      count++;
-    }
-    // 목표가 제일 짧은 조각보다도 작을 때 — 빈 트윗을 내보내지 않는다.
-    // 그래서 실제 최소 길이는 "가장 짧은 조각"이 정한다. 조각을 10자 이상으로 쓰는 이유다.
-    if (!count) {
-      out = fragments.reduce(function (a, b) { return b.length < a.length ? b : a; });
-    }
-    return out;
-  }
-
   // 돈만 마이너스를 허용한다 — 빚을 져도 능력으로 회생할 수 있어야 하고,
   // 그 마이너스가 대출·대부 이벤트를 부르는 트리거다. 나머지 스탯은 0이 바닥.
   function clampStat(key, v) { return key === "돈" ? v : Math.max(0, v); }
@@ -110,10 +67,9 @@
       lastSettleDay: 1,
       // notifSeen: 이미 확인한 알림 수. 안 읽은 개수를 세는 기준(어느 kind가 알림인지는 ui.js가 안다).
       notifSeen: 0,
-      // npcTweets: 생성형 계정의 트윗 보관함 { "@handle": [트윗] }. 그 계정의 프로필이 이걸 그린다.
-      // npcSeq: 계정별 누적 생성 수. 보관함이 상한에서 밀려도 목표 길이 사다리는 계속 진행해야 한다.
+      // npcTweets: 계정별 트윗 보관함 { "@handle": [트윗] }. 그 계정의 프로필이 이걸 그린다.
       // npcSeen: 그 계정을 처음 본 날 { "@handle": day }. 보관함이 이 날부터 자란다.
-      npcTweets: {}, npcSeq: {}, npcSeen: {},
+      npcTweets: {}, npcSeen: {},
       feed: [], tweetLog: [], activeEvents: [], eventHistory: [], ending: null
     };
   }
@@ -289,7 +245,7 @@
     function genRules() { return (data.timeline && data.timeline.gen) || null; }
 
     function genAccounts() {
-      return data.npcs.filter(function (n) { return n.tweetGen && n.tweetGen.fragments; });
+      return data.npcs.filter(function (n) { return n.tweets && n.tweets.length; });
     }
 
     // 보관함이 없으면 "발견 전 과거 트윗"으로 채운다. 발견한 날 직전 seed일치가 깔린다.
@@ -300,24 +256,29 @@
       addTweets(npc, gen.seed, function (i) { return seenDay - gen.seed + i; });
     }
 
-    // count개를 만들어 보관함에 넣고 방금 넣은 것만 돌려준다.
-    // dayOf(i)로 날짜를 받는 이유: 과거 20개는 날짜가 하루씩 다르고, 오늘 몫은 전부 오늘이다.
+    // count개를 골라 보관함에 넣고 방금 넣은 것만 돌려준다.
+    // dayOf(i)로 날짜를 받는 이유: 과거 트윗은 날짜가 하루씩 다르고, 오늘 몫은 전부 오늘이다.
+    //
+    // 트윗은 통째로 하나를 고른다 — 문장을 조합하지 않는다. 조합하면 같은 문장이
+    // 길이만 다른 트윗으로 계속 재등장해서 타임라인이 지루해진다(실제로 그랬다).
+    // 보관함에 이미 있는 트윗은 후보에서 뺀다 → 한 프로필에 같은 트윗이 두 번 안 뜬다.
+    // 그래서 계정의 트윗 수가 max보다 많아야 매일 새 트윗이 나온다(check-assets.js가 검사).
     function addTweets(npc, count, dayOf) {
       var gen = genRules();
       var box = state.npcTweets[npc.handle] || (state.npcTweets[npc.handle] = []);
       var made = [];
       for (var i = 0; i < count; i++) {
-        var seq = state.npcSeq[npc.handle] || 0;
-        state.npcSeq[npc.handle] = seq + 1;
-        // 치환은 조합 "전"에 해야 한다 — {떡밥}(4자)이 "번역기 오역 사건"(9자)으로 늘어나므로
-        // 조합 후에 치환하면 목표 길이를 넘어 140자를 뚫는다(실제로 145자가 나왔다).
-        var filled = npc.tweetGen.fragments.map(fillTemplate);
+        // src(치환 전 원문)로 중복을 본다 — text는 {떡밥}이 치환돼 원문과 다르다.
+        var used = {};
+        box.concat(made).forEach(function (t) { used[t.src || t.text] = true; });
+        var free = npc.tweets.filter(function (t) { return !used[t]; });
+        if (!free.length) break; // 낼 새 트윗이 없으면 그 날은 안 올린다
+        var src = pick(free);
         // id는 내 트윗과 같은 seq를 쓴다 — 겹치지 않아야 상세 페이지가 엉키지 않는다.
         // 보관함에만 있는 트윗도 상세로 열 수 있어야 하므로 전부 id를 받는다.
-        made.push({ id: "tw" + ++state.tweetSeq,
+        made.push({ id: "tw" + ++state.tweetSeq, src: src,
           author: npc.handle, name: npc.name, kind: "npc",
-          text: composeTweet(filled, targetLength(seq, gen), pick),
-          day: dayOf(i) });
+          text: fillTemplate(src), day: dayOf(i) });
       }
       box.push.apply(box, made);
       if (box.length > gen.max) box.splice(0, box.length - gen.max); // 오래된 것부터 밀려난다
@@ -467,7 +428,7 @@
   }
 
   return { _utils: { compare: compare, checkCond: checkCond, evalFormula: evalFormula,
-    evalEffect: evalEffect, targetLength: targetLength, composeTweet: composeTweet },
+    evalEffect: evalEffect },
     create: create };
 })();
 if (typeof module !== "undefined") module.exports = Engine;

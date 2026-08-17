@@ -494,50 +494,21 @@ assert.ok(r9.feedItems.some(function (f) { return f.kind === "system"; }), "붕�
 
 console.log("Task 5 OK");
 
-// --- Task 6: 생성형 계정 (보관함 + 길이 분포) ---
+// --- Task 6: 계정 트윗 보관함 ---
 var GEN = loadData().timeline.gen;
-var genNpc = loadData().npcs.filter(function (n) { return n.tweetGen; })[0];
-assert.ok(genNpc, "생성형 계정이 하나 있다");
+var genNpc = loadData().npcs[0];
 
-// 목표 길이는 min~max를 고르게 덮는다 — 한 바퀴(max개) 동안 모든 칸을 정확히 한 번 지난다
-var slots = [];
-for (var s = 0; s < GEN.max; s++) slots.push(U.targetLength(s, GEN));
-assert.strictEqual(new Set(slots).size, GEN.max,
-  "목표 길이가 " + GEN.max + "칸 전부를 한 번씩 지나야 한다 (실제 " + new Set(slots).size + "종)");
-assert.strictEqual(Math.min.apply(null, slots), GEN.minLength, "최단 목표 = minLength");
-assert.strictEqual(Math.max.apply(null, slots), GEN.maxLength, "최장 목표 = maxLength");
-// 사다리를 순서대로 밟지 않는다 (그러면 초반에 짧은 트윗만 몰린다)
-assert.ok(slots[0] !== Math.min.apply(null, slots.slice(0, 5)) ||
-  slots[1] > slots[0] + 10, "목표 길이가 단조 증가하면 분포가 한쪽으로 몰린다");
+// 트윗은 통째로 저장된다 — 데이터의 문장을 조합하지 않는다.
+// 조합하면 같은 문장이 길이만 다른 트윗으로 계속 재등장한다(그래서 방식을 바꿨다).
+assert.ok(genNpc.tweets && genNpc.tweets.length, "계정에 트윗 목록이 있다");
+assert.strictEqual(genNpc.tweetGen, undefined, "조각 조합(tweetGen)은 없어졌다");
+assert.strictEqual(typeof U.composeTweet, "undefined", "조합 함수도 없어졌다");
 
-// 실제로 생성된 트윗이 전부 10~140자 안에 들고, 범위를 고르게 채운다
-var lengths = [];
-for (var k = 0; k < GEN.max; k++) {
-  lengths.push(U.composeTweet(genNpc.tweetGen.fragments, U.targetLength(k, GEN),
-    function (arr) { return arr[(k * 7) % arr.length]; }).length);
-}
-assert.ok(Math.min.apply(null, lengths) >= GEN.minLength,
-  "10자 미만 트윗이 나왔다: " + Math.min.apply(null, lengths));
-assert.ok(Math.max.apply(null, lengths) <= GEN.maxLength,
-  "140자 초과 트윗이 나왔다: " + Math.max.apply(null, lengths));
-// 4구간(10~42/43~75/76~107/108~140)에 모두 걸쳐야 "골고루"라 할 수 있다
-var buckets = [0, 0, 0, 0], span = (GEN.maxLength - GEN.minLength) / 4;
-lengths.forEach(function (L) {
-  buckets[Math.min(3, Math.floor((L - GEN.minLength) / span))]++;
+// 계정의 트윗 수가 상한보다 많아야 매일 새 트윗이 나온다(보관함에 있는 건 후보에서 빠지므로)
+loadData().npcs.forEach(function (n) {
+  assert.ok(n.tweets.length > GEN.max,
+    n.handle + ": 트윗 " + n.tweets.length + "개 <= max " + GEN.max + " — 새 트윗이 안 나온다");
 });
-assert.ok(buckets.every(function (b) { return b >= 5; }),
-  "길이가 한쪽으로 몰렸다 (구간별 개수: " + buckets.join("/") + ")");
-
-// 이음말이 뭐든(공백·줄바꿈·빈 줄) 목표 길이를 넘지 않고, 여러 문장으로 채운다
-var longTweet = U.composeTweet(genNpc.tweetGen.fragments, GEN.maxLength, function (a) { return a[0]; });
-assert.ok(longTweet.length <= GEN.maxLength, "목표를 넘지 않는다: " + longTweet.length);
-assert.ok(longTweet.split(/\s+/).length > 1, "긴 목표는 문장 여러 개로 채운다");
-assert.ok(!/^\s|\s$/.test(longTweet), "앞뒤에 공백·줄바꿈이 남지 않는다");
-// 이음말이 길이에 포함되는지 — 빈 줄(\n\n, 2자)만 고르게 해도 목표를 넘으면 안 된다
-var breaky = U.composeTweet(genNpc.tweetGen.fragments, GEN.maxLength,
-  function (a) { return a[a.length - 1]; }); // JOINS의 마지막 = "\n\n"
-assert.ok(breaky.length <= GEN.maxLength, "빈 줄로 이어도 목표를 넘지 않는다: " + breaky.length);
-assert.ok(breaky.indexOf("\n\n") !== -1, "빈 줄로 이어진다");
 
 // 보관함은 "발견한 날"부터 자란다 — 만나기 전엔 아무것도 없다
 var gBox = Engine.create(loadSolo(), null, function () { return 0.99; }); // 이벤트 미발동
@@ -574,16 +545,15 @@ for (var t2 = 0; t2 < 40; t2++) {
 }
 assert.strictEqual(box.length, GEN.max, "보관함은 " + GEN.max + "개를 넘지 않는다: " + box.length);
 assert.notStrictEqual(box[0].text, oldestBefore, "상한에 닿으면 오래된 것부터 밀려난다");
-// 밀려나도 길이 사다리는 계속 진행한다 (같은 길이만 반복되면 안 된다)
-assert.ok(gBox.getState().npcSeq[genNpc.handle] > GEN.max,
-  "누적 생성 수는 상한과 무관하게 계속 늘어난다");
-var lateLengths = box.map(function (t) { return t.text.length; });
-assert.ok(new Set(lateLengths).size > 10,
-  "보관함 안 길이가 다양해야 한다 (실제 " + new Set(lateLengths).size + "종)");
+// 한 프로필에 같은 트윗이 두 번 뜨지 않는다 — 이게 통째 저장으로 바꾼 이유다
+var texts = box.map(function (t) { return t.text; });
+assert.strictEqual(new Set(texts).size, texts.length,
+  "보관함에 같은 트윗이 중복됐다");
+assert.ok(new Set(box.map(function (t) { return t.text.length; })).size > 8,
+  "보관함 안 길이가 다양해야 한다");
 
 // 실제 게임에서 나온 트윗도 전부 10~140자 안에 있어야 한다.
-// composeTweet만 직접 재면 {떡밥} 치환을 못 잡는다 — 4자 자리표시자가 9자로 늘어나
-// 조합 후에 치환하면 140자를 뚫는다(실제로 145자가 나왔다).
+// {떡밥} 치환으로 길이가 늘어나므로 데이터만 재는 check-assets.js로는 부족하다.
 var gLen = Engine.create(loadSolo(), null, function () { return 0.5; });
 loadSolo().npcs.forEach(function (n) { gLen.getState().npcSeen[n.handle] = 1; });
 for (var t3 = 0; t3 < 12; t3++) gLen.advanceTurn("meme", true);
@@ -600,7 +570,7 @@ allGen.forEach(function (t) {
 });
 assert.strictEqual(new Set(allGen.map(function (t) { return t.id; })).size, allGen.length,
   "트윗 id가 중복되지 않는다");
-// 실제 트윗처럼 줄바꿈이 섞여 있어야 한다 — 전부 공백으로만 이으면 매 줄이 꽉 찬 벽이 된다
+// 실제 트윗처럼 줄바꿈이 섞여 있어야 한다 (이제 데이터에 직접 적혀 있다)
 var withBreak = allGen.filter(function (t) { return t.text.indexOf("\n") !== -1; });
 assert.ok(withBreak.length > allGen.length * 0.2,
   "줄바꿈이 들어간 트윗이 너무 적다: " + withBreak.length + "/" + allGen.length);
