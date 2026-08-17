@@ -85,6 +85,31 @@ assert.doesNotThrow(function () { g3c.advanceTurn("meme", true); }, "구버전 �
 g3b.getState().stats.돈 = 250000;
 assert.doesNotThrow(function () { g3b.advanceTurn("promo", false); }, "돈 수식이 터지지 않음");
 
+// 구버전 세이브 보정: "없었던 필드"는 기본값을 채우기 전에 기록해야 한다.
+// saved와 state는 같은 객체라, 채운 뒤에 saved.x === undefined로 물으면 영원히 거짓이다.
+var legacy3 = { day: 40, followers: 5000,
+  stats: { 글빨: 20, 유머: 20, 감각: 20, 멘탈: 50, 돈: 300000, 논란성: 5 },
+  tweetSeq: 3,
+  feed: [{ kind: "like", actors: [{ handle: "@a", name: "a" }], others: 5, text: "", day: 39 },
+    { kind: "follow", actors: [{ handle: "@b", name: "b" }], others: 2, text: "", day: 38 }],
+  tweetLog: [{ id: "tw1", author: "me", text: "옛 트윗", day: 39, views: 9999, kind: "me" }],
+  activeEvents: [], eventHistory: [], ending: null };
+var g3d = Engine.create(loadData(), legacy3);
+assert.strictEqual(g3d.getState().lastSettleDay, 40,
+  "정산 기준일이 없던 세이브는 '지금부터' 센다 (1로 두면 옛 트윗을 몰아서 정산한다)");
+assert.strictEqual(g3d.getState().notifSeen, 2,
+  "알림 읽음 기준이 없던 세이브는 지금까지를 다 읽은 것으로 본다");
+// 그 다음 턴에 옛 트윗(9999회)이 정산에 섞이지 않는다
+assert.strictEqual(g3d.advanceTurn("write", true).settlement, null,
+  "보정 직후엔 정산이 바로 터지지 않는다");
+
+// 반대로 값이 있는 세이브는 건드리지 않는다
+var keep = JSON.parse(JSON.stringify(legacy3));
+keep.lastSettleDay = 36; keep.notifSeen = 1;
+var g3e = Engine.create(loadData(), keep);
+assert.strictEqual(g3e.getState().lastSettleDay, 36, "있는 값은 덮어쓰지 않는다");
+assert.strictEqual(g3e.getState().notifSeen, 1, "있는 값은 덮어쓰지 않는다");
+
 console.log("Task 2 OK");
 
 // --- Task 3: advanceTurn(actionId, doTweet) ---

@@ -61,7 +61,16 @@
   function closePopovers() { UI.closeStats(); UI.closeAccountMenu(); }
 
   document.querySelectorAll(".nav-btn[data-view]").forEach(function (btn) {
-    btn.onclick = function () { UI.switchView(btn.dataset.view); closePopovers(); };
+    btn.onclick = function () {
+      UI.switchView(btn.dataset.view);
+      closePopovers();
+      // 알림을 열면 읽은 것으로 처리한다 — 뱃지가 사라지고 그 상태가 저장돼야 한다
+      if (btn.dataset.view === "notif") {
+        UI.markNotifsRead(game.getState());
+        save(game.getState());
+      }
+      refresh();
+    };
   });
 
   // 두 팝오버는 배타적 — 하나를 열면 다른 하나는 닫는다

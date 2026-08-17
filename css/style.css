@@ -42,8 +42,10 @@ body { background: var(--bg); color: var(--text); font-size: var(--fs-sm);
   padding: 9px 12px; border-radius: 24px; cursor: pointer; }
 .nav-btn:hover { background: var(--hover); }
 .nav-btn.active { font-weight: 700; }
-.badge { background: var(--accent); color: #fff; border-radius: 10px;
-  padding: 1px 6px; font-size: var(--fs-xs); font-weight: 700; }
+/* 안 읽은 알림 표시 — 개수는 안 쓰고 점만 찍는다(빈 span). 아이콘 우측 상단에 붙는다 */
+.nav-icon { position: relative; display: inline-flex; }
+.badge { position: absolute; top: -0.1rem; right: -0.15rem;
+  width: 0.62rem; height: 0.62rem; border-radius: 50%; background: var(--accent); }
 
 /* 스탯 패널 — 사이드바 하단, 새 게임 버튼 바로 위 */
 .stats-panel { margin-top: auto; padding: 10px 2px 8px; border-top: 1px solid var(--border);
@@ -275,8 +277,7 @@ body { background: var(--bg); color: var(--text); font-size: var(--fs-sm);
   .nav-btn { justify-content: center; border-radius: 12px; padding: 11px 0; }
   .nav-btn .label, .account .label { display: none; }
   .nav-btn.active { color: var(--accent); }
-  /* 라벨이 없으니 뱃지를 아이콘 위로 올린다 */
-  .badge { position: absolute; top: 3px; left: 50%; margin-left: 1px; }
+  /* 뱃지는 .nav-icon 기준으로 붙어 있어 라벨이 사라져도 아이콘을 따라간다 — 별도 보정 불필요 */
   /* 계정 블록은 독바에서 아바타만 남는다 */
   .account-block { margin-top: 0; }
   .account { justify-content: center; border-radius: 12px; padding: 11px 0; gap: 0; }

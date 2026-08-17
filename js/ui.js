@@ -37,6 +37,18 @@ var UI = (function () {
   var TIMELINE_KINDS = ["me", "event", "system", "settlement"];
   var NOTIF_KINDS = ["like", "retweet", "follow", "reply", "event", "system", "settlement"];
 
+  function notifItemsOf(state) {
+    return state.feed.filter(function (f) { return NOTIF_KINDS.indexOf(f.kind) !== -1; });
+  }
+
+  // 안 읽은 알림 수. 옛 세이브 보정 탓에 음수가 나올 수 있어 0으로 자른다.
+  function unreadNotifs(state) {
+    return Math.max(0, notifItemsOf(state).length - (state.notifSeen || 0));
+  }
+
+  // 알림 화면을 열면 읽은 것으로 처리한다. 저장은 호출한 쪽(main.js)이 한다.
+  function markNotifsRead(state) { state.notifSeen = notifItemsOf(state).length; }
+
   function avatarIcon(item) {
     if (item.author === "me") return "circle-user";
     if (item.kind === "event") return "globe";
@@ -263,12 +275,9 @@ var UI = (function () {
         panel.appendChild(row);
       });
     });
-    var notifItems = state.feed.filter(function (f) { return NOTIF_KINDS.indexOf(f.kind) !== -1; });
-    renderFeed($("notif-list"), notifItems, "아직 알림이 없습니다.");
-    var badge = $("notif-badge");
-    var pending = state.activeEvents.length;
-    badge.textContent = pending;
-    badge.classList.toggle("hidden", pending === 0);
+    renderFeed($("notif-list"), notifItemsOf(state), "아직 알림이 없습니다.");
+    // 안 읽은 알림이 있으면 점만 띄운다 (개수는 안 쓴다 — 뱃지는 빈 span이다)
+    $("notif-badge").classList.toggle("hidden", unreadNotifs(state) === 0);
   }
 
   // 돈만 원 단위로 표기한다 (엔진은 정수 원으로만 다룬다)
@@ -393,7 +402,8 @@ var UI = (function () {
     showSettlement: showSettlement, dateLabel: dateLabel,
     animateLatestMetrics: animateLatestMetrics,
     showEnding: showEnding, switchView: switchView,
-    setProfileTab: setProfileTab, toggleStats: toggleStats, closeStats: closeStats,
+    setProfileTab: setProfileTab, markNotifsRead: markNotifsRead,
+    toggleStats: toggleStats, closeStats: closeStats,
     toggleAccountMenu: toggleAccountMenu, closeAccountMenu: closeAccountMenu,
     openTweetDetail: openTweetDetail, closeTweetDetail: closeTweetDetail };
 })();

@@ -65,6 +65,8 @@
       tweetSeq: 0,
       // lastSettleDay: 아직 정산하지 않은 주의 첫날. 날짜가 건너뛰어도 한 주를 빠뜨리지 않는 근거.
       lastSettleDay: 1,
+      // notifSeen: 이미 확인한 알림 수. 안 읽은 개수를 세는 기준(어느 kind가 알림인지는 ui.js가 안다).
+      notifSeen: 0,
       feed: [], tweetLog: [], activeEvents: [], eventHistory: [], ending: null
     };
   }
@@ -79,9 +81,12 @@
     Object.keys(blank.stats).forEach(function (k) {
       if (typeof state.stats[k] !== "number") state.stats[k] = blank.stats[k];
     });
-    // 나중에 추가된 최상위 필드(tweetSeq 등)도 같이 채운다
+    // 나중에 추가된 최상위 필드(tweetSeq 등)도 같이 채운다.
+    // 어느 필드가 없었는지는 채우기 전에 기록해둬야 한다 — saved와 state는 같은 객체라
+    // 채운 뒤에 saved.x === undefined로 물으면 이미 값이 들어가 있어 영원히 거짓이다(실제로 겪음).
+    var missing = {};
     Object.keys(blank).forEach(function (k) {
-      if (state[k] === undefined) state[k] = blank[k];
+      if (state[k] === undefined) { missing[k] = true; state[k] = blank[k]; }
     });
     // id 없이 저장된 옛 트윗에 id를 붙여준다 — 없으면 상세 페이지를 열 수 없다
     state.tweetLog.concat(state.feed).forEach(function (t) {
@@ -89,7 +94,10 @@
     });
     // 정산 기준일이 없던 세이브는 "지금부터" 한 주를 센다.
     // 기본값 1을 그대로 쓰면 옛 트윗 수십 일 치를 한 번에 정산해버린다.
-    if (saved && saved.lastSettleDay === undefined) state.lastSettleDay = state.day;
+    if (missing.lastSettleDay) state.lastSettleDay = state.day;
+    // 알림 읽음 기준이 없던 세이브는 지금까지를 다 읽은 것으로 본다 — 켜자마자 수십 개가 안 읽음으로
+    // 뜨면 안 된다. feed.length는 알림 종류만 센 게 아니라 넉넉하지만 안 읽은 수는 0으로 잘려 안전하다.
+    if (missing.notifSeen) state.notifSeen = state.feed.length;
 
     function getActions() {
       var list = [];
