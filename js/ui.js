@@ -95,10 +95,11 @@ var UI = (function () {
     opts = opts || {};
     var div = document.createElement("div");
     div.className = "tweet " + item.kind + (opts.detail ? " detail" : "");
-    // 클릭하면 상세로: 내 트윗은 자기 스레드, 답글은 원본 트윗의 스레드로 간다.
+    // 클릭하면 상세로: 답글은 원본 트윗의 스레드로, 나머지(내 트윗·남의 트윗)는 자기 스레드로.
+    // 이벤트·시스템 항목은 id가 없어서 자동으로 제외된다.
     // 상세 화면 안에서는 더 들어갈 곳이 없으므로 링크를 걸지 않는다.
     if (!opts.detail) {
-      var target = item.kind === "me" ? item.id : (item.kind === "reply" ? item.replyTo : null);
+      var target = item.kind === "reply" ? item.replyTo : item.id;
       if (target) div.dataset.detail = target;
     }
     var who = item.author === "me" ? "나" : (item.name || item.author);
@@ -245,9 +246,12 @@ var UI = (function () {
     if (!detailTweetId) return;
     var main = $("tweet-detail-main");
     main.innerHTML = "";
-    var tweet = state.tweetLog.concat(state.feed).filter(function (t) {
-      return t.id === detailTweetId;
-    })[0];
+    // 보관함까지 뒤진다 — 남의 트윗은 내 피드에 흘러온 것만 feed에 있고,
+    // 프로필에서 누른 트윗은 보관함에만 있을 수 있다.
+    var pool = state.tweetLog.concat(state.feed);
+    var boxes = state.npcTweets || {};
+    Object.keys(boxes).forEach(function (h) { pool = pool.concat(boxes[h]); });
+    var tweet = pool.filter(function (t) { return t.id === detailTweetId; })[0];
     if (!tweet) {
       renderFeed(main, [], "게시물을 찾을 수 없습니다.");
       renderFeed($("tweet-detail-replies"), [], "");

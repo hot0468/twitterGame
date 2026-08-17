@@ -276,8 +276,14 @@
       for (var i = 0; i < count; i++) {
         var seq = state.npcSeq[npc.handle] || 0;
         state.npcSeq[npc.handle] = seq + 1;
-        made.push({ author: npc.handle, name: npc.name, kind: "npc",
-          text: composeTweet(npc.tweetGen.fragments, targetLength(seq, gen), pick),
+        // 치환은 조합 "전"에 해야 한다 — {떡밥}(4자)이 "번역기 오역 사건"(9자)으로 늘어나므로
+        // 조합 후에 치환하면 목표 길이를 넘어 140자를 뚫는다(실제로 145자가 나왔다).
+        var filled = npc.tweetGen.fragments.map(fillTemplate);
+        // id는 내 트윗과 같은 seq를 쓴다 — 겹치지 않아야 상세 페이지가 엉키지 않는다.
+        // 보관함에만 있는 트윗도 상세로 열 수 있어야 하므로 전부 id를 받는다.
+        made.push({ id: "tw" + ++state.tweetSeq,
+          author: npc.handle, name: npc.name, kind: "npc",
+          text: composeTweet(filled, targetLength(seq, gen), pick),
           day: dayOf(i) });
       }
       box.push.apply(box, made);
@@ -347,29 +353,27 @@
         }
       }
 
-      // 팔로잉 타임라인: 고정 목록(tweets)을 가진 계정들이 자기 전용 트윗을 올린다.
-      // drawFrom으로 뽑으므로 같은 계정이 하루에 두 번 올리지 않는다.
-      var perDay = (data.timeline && data.timeline.npcTweetsPerDay) || 0;
-      drawFrom(data.npcs.filter(function (n) { return n.tweets && n.tweets.length; }), perDay)
-        .forEach(function (npc) {
-          feedItems.push({ author: npc.handle, name: npc.name, kind: "npc",
-            text: fillTemplate(pick(npc.tweets)), day: state.day });
-        });
-
-      // 생성형 계정: 보관함이 "발견한 날"부터 자란다. 아직 만나지 않은 계정은 조용하다
-      // (답글·좋아요로 먼저 등장해서 발견되고, 그 다음 턴부터 매일 올린다).
+      // 팔로잉 타임라인. 두 단계로 갈린다:
+      //   1) 발견한 계정은 전부 매일 보관함을 채운다 → 그 계정 프로필에 쌓인다.
+      //   2) 그중 몇 계정의 오늘 트윗만 내 홈 타임라인에 흐른다.
+      // 전원을 타임라인에 띄우면 하루에 30개가 쏟아진다. 못 본 트윗은 프로필에서 본다 —
+      // 실제 트위터에서도 팔로잉 전원의 트윗을 다 보지는 않는다.
       var gen = genRules();
       if (gen) {
-        genAccounts().forEach(function (npc) {
-          var seenDay = state.npcSeen[npc.handle];
-          if (seenDay == null) return;
+        var perDay = (data.timeline && data.timeline.npcTweetsPerDay) || 0;
+        var today = {};
+        var live = genAccounts().filter(function (n) { return state.npcSeen[n.handle] != null; });
+        live.forEach(function (npc) {
           if (!state.npcTweets[npc.handle]) {
             // 발견 전의 과거 트윗. 보관함에만 넣는다 — 홈 타임라인이 한 번에 20개로 도배되면 안 된다.
+            var seenDay = state.npcSeen[npc.handle];
             addTweets(npc, gen.seed, function (i) { return seenDay - gen.seed + i; });
           }
-          addTweets(npc, gen.perDay, function () { return state.day; }).forEach(function (t) {
-            feedItems.push(t);
-          });
+          today[npc.handle] = addTweets(npc, gen.perDay, function () { return state.day; });
+        });
+        // drawFrom으로 뽑으므로 같은 계정이 하루에 두 번 타임라인에 뜨지 않는다
+        drawFrom(live, perDay).forEach(function (npc) {
+          feedItems.push(pick(today[npc.handle]));
         });
       }
 

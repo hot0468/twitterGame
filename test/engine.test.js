@@ -537,10 +537,11 @@ assert.strictEqual(box.length, GEN.seed + GEN.perDay,
 var past = box.slice(0, GEN.seed).map(function (t) { return t.day; });
 assert.deepStrictEqual([Math.min.apply(null, past), Math.max.apply(null, past)],
   [seenOn - GEN.seed, seenOn - 1], "과거 트윗은 발견일 직전까지의 날짜를 쓴다");
-// 과거 트윗은 내 타임라인에 흐르지 않는다 (첫날부터 20개로 도배되면 안 된다)
+// 보관함은 하루 perDay개씩 차지만 내 타임라인에는 계정당 한 개만 흐른다.
+// 과거 20개도 타임라인에 안 뜬다 — 첫날부터 도배되면 안 되고, 나머지는 프로필에서 본다.
 assert.strictEqual(rBox.feedItems.filter(function (f) {
   return f.kind === "npc" && f.author === genNpc.handle;
-}).length, GEN.perDay, "타임라인에는 오늘 몫만 흐른다");
+}).length, 1, "타임라인에는 그 계정의 오늘 트윗 하나만 흐른다");
 
 // 그 다음부터 하루 perDay개씩
 gBox.advanceTurn("rest", false);
@@ -560,6 +561,26 @@ assert.ok(gBox.getState().npcSeq[genNpc.handle] > GEN.max,
 var lateLengths = box.map(function (t) { return t.text.length; });
 assert.ok(new Set(lateLengths).size > 10,
   "보관함 안 길이가 다양해야 한다 (실제 " + new Set(lateLengths).size + "종)");
+
+// 실제 게임에서 나온 트윗도 전부 10~140자 안에 있어야 한다.
+// composeTweet만 직접 재면 {떡밥} 치환을 못 잡는다 — 4자 자리표시자가 9자로 늘어나
+// 조합 후에 치환하면 140자를 뚫는다(실제로 145자가 나왔다).
+var gLen = Engine.create(loadData(), null, function () { return 0.5; });
+loadData().npcs.forEach(function (n) { gLen.getState().npcSeen[n.handle] = 1; });
+for (var t3 = 0; t3 < 12; t3++) gLen.advanceTurn("meme", true);
+var allGen = [];
+Object.keys(gLen.getState().npcTweets).forEach(function (h) {
+  allGen = allGen.concat(gLen.getState().npcTweets[h]);
+});
+assert.ok(allGen.length > 200, "여러 계정의 보관함이 찼다: " + allGen.length);
+allGen.forEach(function (t) {
+  assert.ok(t.text.length >= GEN.minLength && t.text.length <= GEN.maxLength,
+    "길이 범위를 벗어난 트윗(" + t.text.length + "자) " + t.author + ": " + t.text);
+  assert.strictEqual(t.text.indexOf("{"), -1, "치환되지 않은 자리표시자: " + t.text);
+  assert.ok(t.id, "남의 트윗도 id가 있어야 상세를 열 수 있다");
+});
+assert.strictEqual(new Set(allGen.map(function (t) { return t.id; })).size, allGen.length,
+  "트윗 id가 중복되지 않는다");
 
 // 만나지 않은 계정은 계속 조용하다
 var gQuiet = Engine.create(loadData(), null, function () { return 0.99; });

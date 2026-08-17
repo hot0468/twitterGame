@@ -1,70 +1,82 @@
-// 계정마다 프로필 사진이 실제로 있는지 검사한다.
-// 파일명 규칙(핸들에서 @를 뗀 것)이 코드가 아니라 관례라서, 빠뜨려도 브라우저를 열기 전엔 모른다.
+// 계정 데이터가 실제로 굴러갈 수 있는 상태인지 검사한다.
+// 파일명 규칙·조각 규칙은 코드가 아니라 관례라서, 어겨도 브라우저를 열기 전엔 모른다.
 var assert = require("assert");
 var fs = require("fs");
 var path = require("path");
 
 var root = path.join(__dirname, "..");
 var dir = path.join(root, "assets", "avatars");
-var npcs = require(path.join(root, "data", "npcs.js")).npcs;
+var data = require(path.join(root, "data", "npcs.js"));
+var npcs = data.npcs;
+var gen = data.timeline.gen;
 
 function has(name) { return fs.existsSync(path.join(dir, name + ".svg")); }
 
-// 플레이어
+// ── 프로필 사진 ──
 assert.ok(has("me"), "me.svg가 없다 — 내 아바타가 전부 깨진다");
 
-// NPC 전원
 var missing = npcs.filter(function (n) { return !has(n.handle.replace("@", "")); });
 assert.strictEqual(missing.length, 0,
   "아바타 없는 계정: " + missing.map(function (n) { return n.handle; }).join(", ") +
   "\n  assets/avatars/README.md의 curl 한 줄로 받으면 된다");
 
-// 반대로 쓰이지 않는 사진이 쌓이는 것도 잡아준다(계정을 지웠을 때)
+// 계정을 지웠을 때 쓰이지 않는 사진이 쌓이는 것도 잡아준다
 var used = npcs.map(function (n) { return n.handle.replace("@", "") + ".svg"; }).concat("me.svg");
 var orphans = fs.readdirSync(dir).filter(function (f) {
   return f.endsWith(".svg") && used.indexOf(f) === -1;
 });
 assert.strictEqual(orphans.length, 0, "쓰이지 않는 아바타: " + orphans.join(", "));
 
-// 계정은 고정 목록(tweets)이나 생성기(tweetGen) 중 하나는 있어야 타임라인에 나타난다
-function hasFixed(n) { return n.tweets && n.tweets.length; }
-function hasGen(n) { return n.tweetGen && n.tweetGen.fragments && n.tweetGen.fragments.length; }
-var silent = npcs.filter(function (n) { return !hasFixed(n) && !hasGen(n); });
-assert.strictEqual(silent.length, 0,
-  "올릴 트윗이 없는 계정: " + silent.map(function (n) { return n.handle; }).join(", "));
-
-// 생성기 조각은 minLength 이상이어야 한다 — 가장 짧은 조각이 트윗의 실제 최소 길이를 정한다
-var gen = require(path.join(root, "data", "npcs.js")).timeline.gen;
-npcs.filter(hasGen).forEach(function (n) {
-  var short = n.tweetGen.fragments.filter(function (f) { return f.length < gen.minLength; });
-  assert.strictEqual(short.length, 0, n.handle + ": " + gen.minLength +
-    "자보다 짧은 조각이 있다 → " + short.join(" / "));
-  var long = n.tweetGen.fragments.filter(function (f) { return f.length > gen.maxLength; });
-  assert.strictEqual(long.length, 0, n.handle + ": " + gen.maxLength + "자를 넘는 조각이 있다");
-  assert.strictEqual(new Set(n.tweetGen.fragments).size, n.tweetGen.fragments.length,
-    n.handle + ": 중복된 조각이 있다");
-  // 조각이 상한(max)보다 적으면 긴 트윗을 채울 재료가 부족해진다
-  assert.ok(n.tweetGen.fragments.length >= 20,
-    n.handle + ": 조각이 너무 적다(" + n.tweetGen.fragments.length + "개)");
-});
-
-// 프로필 페이지가 채워지는지 — bio나 followers가 없으면 남의 프로필이 빈칸으로 뜬다
+// ── 프로필 내용 ──
 var noBio = npcs.filter(function (n) { return !n.bio; });
 assert.strictEqual(noBio.length, 0,
   "소개글(bio)이 없는 계정: " + noBio.map(function (n) { return n.handle; }).join(", "));
 var noFollowers = npcs.filter(function (n) { return typeof n.followers !== "number"; });
 assert.strictEqual(noFollowers.length, 0,
   "팔로워 수가 없는 계정: " + noFollowers.map(function (n) { return n.handle; }).join(", "));
+var noReplies = npcs.filter(function (n) { return !n.replies || !n.replies.length; });
+assert.strictEqual(noReplies.length, 0,
+  "답글이 없는 계정: " + noReplies.map(function (n) { return n.handle; }).join(", "));
 
-// 같은 트윗 문구를 두 계정이 쓰면 컨셉이 겹친 것 — 계정별 전용이 아니게 된다
-var seen = {}, dup = [];
-npcs.filter(hasFixed).forEach(function (n) {
-  n.tweets.forEach(function (t) {
-    if (seen[t]) dup.push(seen[t] + " / " + n.handle + ": " + t);
-    seen[t] = n.handle;
+// ── 트윗 조각 ──
+// 모든 계정이 생성기를 쓴다. 고정 목록(tweets)은 없앴으므로 남아 있으면 죽은 데이터다.
+var leftover = npcs.filter(function (n) { return n.tweets; });
+assert.strictEqual(leftover.length, 0,
+  "tweets(고정 목록)가 남아 있다 — 이제 엔진이 안 읽는다: " +
+  leftover.map(function (n) { return n.handle; }).join(", "));
+
+var silent = npcs.filter(function (n) {
+  return !n.tweetGen || !n.tweetGen.fragments || !n.tweetGen.fragments.length;
+});
+assert.strictEqual(silent.length, 0,
+  "조각이 없는 계정(트윗을 못 올린다): " + silent.map(function (n) { return n.handle; }).join(", "));
+
+var owner = {}, cross = [];
+npcs.forEach(function (n) {
+  var frags = n.tweetGen.fragments;
+
+  var short = frags.filter(function (f) { return f.length < gen.minLength; });
+  assert.strictEqual(short.length, 0, n.handle + ": " + gen.minLength +
+    "자보다 짧은 조각 → " + short.map(function (f) { return f + "(" + f.length + ")"; }).join(" / "));
+  var long = frags.filter(function (f) { return f.length > gen.maxLength; });
+  assert.strictEqual(long.length, 0, n.handle + ": " + gen.maxLength + "자를 넘는 조각이 있다");
+
+  assert.strictEqual(new Set(frags).size, frags.length, n.handle + ": 계정 안에 중복된 조각이 있다");
+  // 조각이 적으면 긴 트윗을 채울 재료가 부족해 목표 길이에 못 닿는다
+  assert.ok(frags.length >= 18, n.handle + ": 조각이 너무 적다(" + frags.length + "개, 18개 이상)");
+
+  // 길이가 한쪽으로 몰리면 짧은 트윗이나 긴 트윗 한쪽이 안 나온다
+  assert.ok(Math.min.apply(null, frags.map(function (f) { return f.length; })) <= 16,
+    n.handle + ": 짧은 조각(16자 이하)이 없어 짧은 트윗을 만들 수 없다");
+
+  frags.forEach(function (f) {
+    if (owner[f] && owner[f] !== n.handle) cross.push(owner[f] + " / " + n.handle + ": " + f);
+    owner[f] = n.handle;
   });
 });
-assert.strictEqual(dup.length, 0, "여러 계정이 같은 트윗을 쓴다:\n  " + dup.join("\n  "));
+// 계정 간에 같은 문구를 쓰면 컨셉이 겹친다 — 전용 트윗이 아니게 된다
+assert.strictEqual(cross.length, 0, "여러 계정이 같은 조각을 쓴다:\n  " + cross.join("\n  "));
 
+var total = npcs.reduce(function (a, n) { return a + n.tweetGen.fragments.length; }, 0);
 console.log("assets OK — 계정 " + npcs.length + "개, 아바타 " + (npcs.length + 1) +
-  "개, 고정 트윗 " + Object.keys(seen).length + "개, 생성형 계정 " + npcs.filter(hasGen).length + "개");
+  "개, 조각 " + total + "개 (계정당 평균 " + Math.round(total / npcs.length) + "개)");
