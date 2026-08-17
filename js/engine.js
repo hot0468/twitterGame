@@ -39,6 +39,37 @@ var Engine = (function () {
     return Math.round(Function.apply(null, names.concat("return (" + expr + ")")).apply(null, vals));
   }
 
-  return { _utils: { compare: compare, checkCond: checkCond, evalFormula: evalFormula } };
+  function initialState() {
+    return {
+      day: 1, followers: 10,
+      stats: { 글빨: 5, 유머: 5, 감각: 5, 멘탈: 50, 논란성: 0 },
+      feed: [], tweetLog: [], activeEvents: [], eventHistory: [], ending: null
+    };
+  }
+
+  function create(data, saved, rng) {
+    var rand = rng || Math.random;
+    var state = saved || initialState();
+
+    function getActions() {
+      var list = [];
+      state.activeEvents.forEach(function (ae) {
+        var ev = data.events.filter(function (e) { return e.id === ae.eventId; })[0];
+        ev.stages[ae.stage].choices.forEach(function (c, i) {
+          if (!c.requires || checkCond(c.requires, state))
+            list.push({ id: "event:" + ev.id + ":" + i, label: c.label, kind: "event" });
+        });
+      });
+      data.actions.forEach(function (a) {
+        if (!a.requires || checkCond(a.requires, state))
+          list.push({ id: a.id, label: a.label, kind: a.type });
+      });
+      return list;
+    }
+
+    return { getState: function () { return state; }, getActions: getActions };
+  }
+
+  return { _utils: { compare: compare, checkCond: checkCond, evalFormula: evalFormula }, create: create };
 })();
 if (typeof module !== "undefined") module.exports = Engine;
