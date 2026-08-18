@@ -93,12 +93,29 @@ var UI = (function () {
 
   // 남의 트윗에 붙는 반응 버튼. 누른 상태는 state.reacted에 남는다.
   // 내가 누르면 표시 수치가 1 올라간다(실제 X와 동일) — 원본 수치는 그대로 두고 표시만 더한다.
-  function reactBtn(id, kind, icon, base, on) {
+  function reactBtn(id, kind, icon, base, on, extra) {
     var n = (base || 0) + (on ? 1 : 0);
     return '<button class="react ' + kind + (on ? " on" : "") +
-      '" data-react="' + kind + '" data-react-id="' + id + '"' +
+      '" data-react="' + kind + '" data-react-id="' + id + '"' + (extra || "") +
       ' aria-pressed="' + (on ? "true" : "false") + '">' +
       Icons.svg(icon) + "<span>" + (n > 0 ? n.toLocaleString() : "") + "</span></button>";
+  }
+
+  // 리트윗 메뉴를 연 트윗의 id. 한 번에 하나만 열린다.
+  var rtMenuFor = null;
+  function toggleRtMenu(id) { rtMenuFor = rtMenuFor === id ? null : id; }
+  // 닫혔는지 여부를 돌려준다 — 부르는 쪽이 다시 그릴지 정할 수 있게
+  function closeRtMenu() { var was = rtMenuFor !== null; rtMenuFor = null; return was; }
+  function rtMenuOpen() { return rtMenuFor; }
+
+  // 실제 X처럼 리트윗 버튼은 바로 토글하지 않고 메뉴를 연다.
+  // "인용하세요"는 넣지 않았다 — 인용은 내 트윗을 새로 쓰는 일이라 하루를 소모하는
+  // 별개의 행동이고 지금은 그 경로가 없다. 모양만 있는 항목은 넣지 않는다.
+  function rtMenu(id, on) {
+    return '<div class="rt-menu" role="menu">' +
+      '<button class="menu-item" role="menuitem" data-rt-do="1" data-rt-id="' + id + '">' +
+      Icons.svg("repeat-2") + "<span>" + (on ? "재게시 취소" : "재게시") +
+      "</span></button></div>";
   }
 
   // 내가 누른 반응. renderAll이 매 렌더 시작에 채운다 — tweetEl까지 인자로 흘리면
@@ -110,8 +127,13 @@ var UI = (function () {
   function reactRow(item) {
     if (item.kind !== "npc" || !item.id) return "";
     var r = reactedNow[item.id] || {};
+    var open = rtMenuFor === item.id;
+    // 메뉴는 버튼을 감싼 .rt-wrap 기준으로 뜬다 — 피드가 스크롤돼도 버튼을 따라간다
     return '<div class="actions">' +
-      reactBtn(item.id, "rt", "repeat-2", item.rts, r.rt) +
+      '<div class="rt-wrap">' +
+      reactBtn(item.id, "rt", "repeat-2", item.rts, r.rt,
+        ' aria-haspopup="menu" aria-expanded="' + (open ? "true" : "false") + '"') +
+      (open ? rtMenu(item.id, r.rt) : "") + "</div>" +
       reactBtn(item.id, "like", "heart", item.likes, r.like) + "</div>";
   }
 
@@ -718,6 +740,7 @@ var UI = (function () {
     openTweetDetail: openTweetDetail, closeTweetDetail: closeTweetDetail,
     openProfile: openProfile, closeProfile: closeProfile,
     toggleRailMore: toggleRailMore,
+    toggleRtMenu: toggleRtMenu, closeRtMenu: closeRtMenu, rtMenuOpen: rtMenuOpen,
     openSearch: openSearch, closeSearch: closeSearch,
     setSearchQuery: setSearchQuery, setSearchTab: setSearchTab };
 })();

@@ -63,7 +63,8 @@
   };
 
   var focusSearch = false;
-  function closePopovers() { UI.closeStats(); UI.closeAccountMenu(); }
+  // 팝오버는 서로 배타적이다 — 하나를 열면 나머지는 닫는다
+  function closePopovers() { UI.closeStats(); UI.closeAccountMenu(); UI.closeRtMenu(); }
 
   document.querySelectorAll(".nav-btn[data-view]").forEach(function (btn) {
     btn.onclick = function () {
@@ -88,12 +89,14 @@
   document.getElementById("stats-toggle").onclick = function (e) {
     e.stopPropagation();
     UI.closeAccountMenu();
+    if (UI.closeRtMenu()) refresh(); // 리트윗 메뉴는 렌더로 그려지므로 다시 그려야 사라진다
     UI.toggleStats();
   };
 
   document.getElementById("account").onclick = function (e) {
     e.stopPropagation();
     UI.closeStats();
+    if (UI.closeRtMenu()) refresh();
     UI.toggleAccountMenu();
   };
 
@@ -108,6 +111,28 @@
   document.addEventListener("click", function (e) {
     // 반응 버튼이 트윗 안에 있으므로 제일 먼저 본다 — 안 그러면 눌러도 트윗 상세로 새어나간다.
     // 하루를 소모하지 않으므로 resolveTurn을 거치지 않는다.
+    // 리트윗은 실제 X처럼 바로 토글하지 않고 메뉴를 연다. 좋아요는 바로 토글.
+    var rtBtn = e.target.closest('[data-react="rt"]');
+    if (rtBtn) {
+      // closePopovers()를 쓰면 안 된다 — 그게 리트윗 메뉴까지 닫아서
+      // 같은 버튼을 다시 눌러도 항상 열리기만 한다.
+      UI.closeStats();
+      UI.closeAccountMenu();
+      UI.toggleRtMenu(rtBtn.dataset.reactId);
+      refresh();
+      return;
+    }
+    var rtDo = e.target.closest("[data-rt-do]");
+    if (rtDo) {
+      game.toggleReaction(rtDo.dataset.rtId, "rt");
+      UI.closeRtMenu();
+      save(game.getState());
+      refresh();
+      return;
+    }
+    // 메뉴 밖을 눌렀으면 닫는다. 그 클릭의 원래 동작(상세 이동 등)은 이어서 처리한다.
+    var rtClosed = UI.closeRtMenu();
+
     var react = e.target.closest("[data-react]");
     if (react) {
       game.toggleReaction(react.dataset.reactId, react.dataset.react);
@@ -123,7 +148,7 @@
       return;
     }
     var target = e.target.closest(".tweet[data-detail]");
-    if (!target) return;
+    if (!target) { if (rtClosed) refresh(); return; }
     closePopovers();
     UI.openTweetDetail(target.dataset.detail);
     refresh();

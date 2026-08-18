@@ -175,6 +175,13 @@ body { background: var(--bg); color: var(--text); font-size: var(--fs-sm);
 .tweet[data-detail]:hover { background: var(--hover); }
 .tweet.event[data-detail]:hover { background: #e9f4fd; }
 
+/* 리트윗 메뉴. 버튼을 감싼 .rt-wrap 기준으로 떠서 피드가 스크롤돼도 버튼을 따라간다.
+   계정 메뉴와 달리 아래(top:100%)로 편다 — 피드 위쪽 트윗에서 위로 열면 화면 밖으로 나간다. */
+.rt-wrap { position: relative; }
+.rt-menu { position: absolute; left: 0; top: 100%; margin-top: 6px; z-index: 10;
+  min-width: 10rem; padding: 6px 0; background: var(--bg); border-radius: 14px;
+  box-shadow: 0 0 12px rgba(15, 20, 25, 0.18), 0 0 4px rgba(15, 20, 25, 0.08); }
+
 /* ── 트윗 상세 ─────────────────────────────────── */
 .detail-head { display: flex; align-items: center; gap: 14px; padding: 8px 14px;
   border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 4;
