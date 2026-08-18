@@ -1,4 +1,4 @@
-var UI = (function () {
+﻿var UI = (function () {
   function $(id) { return document.getElementById(id); }
 
   // 스탯별 아이콘·색조. 프레젠테이션 전용 — 엔진은 스탯 이름만 안다.
@@ -121,6 +121,7 @@ var UI = (function () {
   // 내가 누른 반응. renderAll이 매 렌더 시작에 채운다 — tweetEl까지 인자로 흘리면
   // renderFeed·feedItemEl 서명이 전부 바뀌므로 렌더 범위 변수로 둔다.
   var reactedNow = {};
+  var followingNow = {};
 
   // 반응은 id가 있는 남의 트윗만 — 답글은 자기 id가 없어서(replyTo만 있다) 대상이 아니고,
   // 내 트윗은 읽기 전용 수치를 보여준다.
@@ -372,11 +373,18 @@ var UI = (function () {
     var row = document.createElement("div");
     row.className = "rail-account";
     row.dataset.account = npc.handle;
+    // 오른쪽 자리는 하나뿐이다 — 팔로우 중이면 팔로워 수를, 아니면 팔로우 버튼을 둔다.
+    // 좁은 레일(21rem)에 둘 다 넣으면 이름이 뭉개진다. 내 계정은 팔로우 대상이 아니다.
+    var canFollow = npc.handle !== ME.handle && !followingNow[npc.handle];
     row.innerHTML = '<div class="avatar small">' + pfp(npc.handle) + "</div>" +
-      '<div class="rail-id"><b></b><span></span></div><span class="rail-count"></span>';
+      '<div class="rail-id"><b></b><span></span></div>' +
+      (canFollow
+        ? '<button class="follow-btn small" data-follow="' + npc.handle + '">팔로우</button>'
+        : '<span class="rail-count"></span>');
     row.querySelector("b").textContent = npc.name;
     row.querySelector(".rail-id span").textContent = npc.handle;
-    row.querySelector(".rail-count").textContent = (npc.followers || 0).toLocaleString();
+    if (!canFollow)
+      row.querySelector(".rail-count").textContent = (npc.followers || 0).toLocaleString();
     return row;
   }
 
@@ -444,16 +452,20 @@ var UI = (function () {
   // 팔로우 중인(=이미 만난) 계정만 보여준다. 아직 못 만난 계정을 띄우면 발견의 재미가 사라지고,
   // 그 계정 프로필에는 아직 트윗이 하나도 없어서 눌러도 빈 화면이 뜬다.
   function renderRailAccounts(state) {
-    var list = ((typeof GAME_DATA !== "undefined" && GAME_DATA.npcs) || [])
+    // 만난 계정을 팔로우 여부로 가른다 — 아래 박스가 곧 팔로우할 거리다.
+    var seen = ((typeof GAME_DATA !== "undefined" && GAME_DATA.npcs) || [])
       .filter(function (n) { return state.npcSeen && state.npcSeen[n.handle] != null; })
       .sort(function (a, b) { return (b.followers || 0) - (a.followers || 0); });
+    var list = seen.filter(function (n) { return followingNow[n.handle]; });
+    var suggest = seen.filter(function (n) { return !followingNow[n.handle]; });
 
     var box = $("rail-accounts");
     box.innerHTML = "";
     if (!list.length) {
       var none = document.createElement("div");
       none.className = "rail-empty";
-      none.textContent = "아직 만난 계정이 없습니다.";
+      none.textContent = seen.length
+        ? "팔로우 중인 계정이 없습니다." : "아직 만난 계정이 없습니다.";
       box.appendChild(none);
     }
     (railExpanded ? list : list.slice(0, RAIL_LIMIT)).forEach(function (n) {
@@ -462,6 +474,12 @@ var UI = (function () {
     var more = $("rail-more");
     more.classList.toggle("hidden", list.length <= RAIL_LIMIT);
     more.textContent = railExpanded ? "접기" : "더 보기";
+
+    // 만났지만 아직 팔로우 안 한 계정. 없으면 박스째 숨긴다(빈 박스를 모양으로 두지 않는다).
+    var sbox = $("rail-suggest");
+    sbox.innerHTML = "";
+    suggest.slice(0, RAIL_LIMIT).forEach(function (n) { sbox.appendChild(accountRow(n)); });
+    $("rail-suggest-box").classList.toggle("hidden", !suggest.length);
   }
 
   // 트렌드는 꾸밈이 아니라 실제 집계다 — data.fills의 소재가 몇 번 트윗됐는지 센다.
@@ -546,6 +564,23 @@ var UI = (function () {
       document.querySelector('.nav-btn[data-view="profile"]').classList.toggle("active", !npc);
     }
 
+    // 팔로우 버튼은 남의 프로필에만 — 내 계정은 팔로우 대상이 아니다
+    var fbtn = $("profile-follow");
+    fbtn.classList.toggle("hidden", !npc);
+    if (npc) {
+      var on = !!followingNow[handle];
+      // 팔로우 중일 땐 두 글자를 다 넣고 CSS가 hover에서 갈아 끼운다 (실제 X와 동일).
+      // 빨갛게만 변하고 "팔로잉"이 그대로면 무슨 일이 일어날지 안 읽힌다.
+      fbtn.innerHTML = on
+        ? '<span class="f-on"></span><span class="f-off"></span>' : "";
+      if (on) {
+        fbtn.querySelector(".f-on").textContent = "팔로잉";
+        fbtn.querySelector(".f-off").textContent = "언팔로우";
+      } else fbtn.textContent = "팔로우";
+      fbtn.classList.toggle("following", on);
+      fbtn.dataset.follow = handle;
+    }
+
     $("profile-pfp").src = pfpSrc(handle);
     $("profile-name").textContent = who.name;
     $("profile-handle").textContent = handle;
@@ -580,6 +615,7 @@ var UI = (function () {
 
   function renderAll(state) {
     reactedNow = state.reacted || {}; // 이 렌더 동안 tweetEl이 참조한다
+    followingNow = state.following || {}; // 같은 이유로 accountRow·renderProfile이 참조한다
     $("day").textContent = state.day + "일차 · " + dateLabel(state.day);
     $("followers").textContent = "팔로워 " + state.followers.toLocaleString();
     // 내가 리트윗한 남의 트윗도 내 타임라인에 뜬다. 리트윗한 날 기준으로 줄을 세운다 —

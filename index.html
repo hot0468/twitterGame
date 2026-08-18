@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
@@ -73,6 +73,8 @@
         <div class="profile-banner"></div>
         <div class="profile-top">
           <div class="avatar big"><img id="profile-pfp" class="pfp" alt="" src="assets/avatars/me.svg"></div>
+          <!-- 남의 프로필에만 뜬다 -->
+          <button id="profile-follow" class="follow-btn hidden">팔로우</button>
         </div>
         <div class="profile-info">
           <h2 id="profile-name" class="profile-name">나</h2>
@@ -137,6 +139,11 @@
         <h2>팔로우 중인 계정</h2>
         <div id="rail-accounts"></div>
         <button id="rail-more" class="rail-more hidden">더 보기</button>
+      </section>
+      <!-- 만났지만 아직 팔로우 안 한 계정. 없으면 통째로 숨는다 -->
+      <section id="rail-suggest-box" class="rail-box hidden">
+        <h2>알 수도 있는 계정</h2>
+        <div id="rail-suggest"></div>
       </section>
       <section class="rail-box">
         <h2>무슨 일이 일어나고 있나요?</h2>

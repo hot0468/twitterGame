@@ -518,6 +518,7 @@ assert.deepStrictEqual(gBox.getState().npcSeen, {}, "시작 시엔 발견 기록
 // 발견을 강제한다 (실제로는 답글·좋아요로 등장한다)
 var seenOn = 5;
 gBox.getState().npcSeen[genNpc.handle] = seenOn;
+gBox.getState().following[genNpc.handle] = true; // 발견≠팔로우 — 팔로우해야 타임라인에 흐른다
 gBox.getState().day = seenOn + 1;
 var rBox = gBox.advanceTurn("rest", false);
 var box = gBox.getState().npcTweets[genNpc.handle];
@@ -686,5 +687,48 @@ gFix.getState().npcTweets[h0].forEach(function (t) {
   assert.strictEqual(typeof t.rts, "number", "옛 트윗에 리트윗 수가 채워진다");
 });
 
-console.log("Task 6 OK");
 
+// ── 팔로우 ────────────────────────────────────
+// 팔로우는 반응과 같은 부류다 — 하루를 안 쓰고 스탯도 안 건드리고, 바꾸는 건
+// "내 홈 타임라인에 누가 흐르는가" 하나뿐이다.
+var gF = Engine.create(loadData(), null, function () { return 0.99; });
+var sF = gF.getState();
+var startFollow = Object.keys(sF.following);
+assert.ok(startFollow.length > 0, "새 게임은 몇 계정을 팔로우한 채 시작한다");
+assert.deepStrictEqual(startFollow.slice().sort(), Object.keys(sF.npcSeen).slice().sort(),
+  "시작 계정은 발견과 팔로우가 같다");
+
+var fH = startFollow[0];
+var dayBefore = sF.day, statsBefore = JSON.stringify(sF.stats);
+assert.deepStrictEqual(gF.toggleFollow(fH), { handle: fH, on: false }, "누르면 언팔로우");
+assert.strictEqual(sF.following[fH], undefined, "언팔로우하면 기록이 지워진다");
+assert.deepStrictEqual(gF.toggleFollow(fH), { handle: fH, on: true }, "다시 누르면 팔로우");
+assert.strictEqual(sF.day, dayBefore, "팔로우는 하루를 쓰지 않는다");
+assert.strictEqual(JSON.stringify(sF.stats), statsBefore, "팔로우는 스탯을 건드리지 않는다");
+assert.strictEqual(gF.toggleFollow("@없는계정"), null, "모르는 핸들은 null");
+assert.strictEqual(gF.toggleFollow(null), null, "빈 입력은 null");
+
+// 전부 언팔로우하면 홈 타임라인에 남의 트윗이 안 흐른다. 그래도 보관함은 계속 자란다 —
+// 실제 트위터도 내가 안 팔로우해도 그 계정은 계속 쓰고, 프로필에 들어가면 보인다.
+Object.keys(sF.following).forEach(function (h) { gF.toggleFollow(h); });
+var boxBefore = sF.npcTweets[fH].length;
+var rF = gF.advanceTurn("rest", false);
+assert.strictEqual(rF.feedItems.filter(function (f) { return f.kind === "npc"; }).length, 0,
+  "아무도 안 팔로우하면 남의 트윗이 타임라인에 안 뜬다");
+assert.ok(sF.npcTweets[fH].length > boxBefore, "팔로우와 무관하게 보관함은 자란다");
+gF.toggleFollow(fH);
+assert.ok(gF.advanceTurn("rest", false).feedItems.filter(function (f) {
+  return f.kind === "npc" && f.author === fH;
+}).length === 1, "다시 팔로우하면 그 계정 트윗이 흐른다");
+
+// 구버전 세이브: following이 없던 시절엔 발견이 곧 팔로우였다.
+// 안 채우면 세이브를 이어받은 순간 타임라인이 텅 빈다.
+var oldSave = JSON.parse(JSON.stringify(gF.getState()));
+delete oldSave.following;
+var gOld = Engine.create(loadData(), oldSave, function () { return 0.99; });
+assert.deepStrictEqual(Object.keys(gOld.getState().following).slice().sort(),
+  Object.keys(oldSave.npcSeen).slice().sort(),
+  "옛 세이브는 발견한 계정을 전부 팔로우 중으로 본다");
+console.log("팔로우 OK");
+
+console.log("Task 6 OK");

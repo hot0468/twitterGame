@@ -1,4 +1,4 @@
-/* UI 전체 스케일 노브. 아이콘·아바타·배너도 rem이라 이 값 하나로 같이 움직인다.
+﻿/* UI 전체 스케일 노브. 아이콘·아바타·배너도 rem이라 이 값 하나로 같이 움직인다.
    scrollbar-gutter: stable — 스크롤바 자리를 항상 비워둔다. 트윗 상세처럼 짧은 화면으로
    들어가면 페이지가 뷰포트보다 짧아져 세로 스크롤바가 사라지는데, 그러면 고정폭 스크롤바를
    쓰는 환경(Windows)에서 가운데 정렬된 레이아웃 전체가 스크롤바 폭만큼 옆으로 밀린다. */
@@ -291,7 +291,22 @@ body { background: var(--bg); color: var(--text); font-size: var(--fs-sm);
 
 /* ── 프로필 (실제 X 프로필 구조: 배너 → 겹친 아바타 → 소개 → 탭) ── */
 .profile-banner { height: 10.5rem; background: linear-gradient(120deg, #1d9bf0, #8ed3f4 70%, #cfe9f7); }
-.profile-top { padding: 0 14px; }
+/* 아바타는 왼쪽, 팔로우 버튼은 오른쪽 위 (실제 X 배치) */
+.profile-top { padding: 0 14px; display: flex; align-items: flex-start;
+  justify-content: space-between; }
+.follow-btn { margin-top: 10px; padding: 7px 16px; border: 0; border-radius: 999px;
+  background: var(--text); color: #fff; font-size: var(--fs-sm); font-weight: 700;
+  cursor: pointer; white-space: nowrap; }
+.follow-btn:hover { opacity: .85; }
+/* 팔로우 중은 눌린 상태가 아니라 "되돌릴 수 있는 상태"라 테두리만 남긴다 */
+.follow-btn.following { background: transparent; color: var(--text);
+  border: 1px solid var(--line); }
+.follow-btn.following:hover { border-color: #f4212e; color: #f4212e; opacity: 1; }
+/* hover에서 "팔로잉" → "언팔로우"로 갈아 끼운다 */
+.follow-btn .f-off { display: none; }
+.follow-btn.following:hover .f-on { display: none; }
+.follow-btn.following:hover .f-off { display: inline; }
+.follow-btn.small { margin-top: 0; padding: 5px 12px; font-size: var(--fs-xs); }
 .profile-top .avatar.big { width: 5.8rem; height: 5.8rem; margin-top: -3rem;
   border: 3px solid var(--bg); background: var(--border); }
 .profile-top .avatar.big .icon { width: 3rem; height: 3rem; }

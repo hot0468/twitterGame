@@ -1,4 +1,4 @@
-(function () {
+﻿(function () {
   var SAVE_KEY = "twitterGame.save";
 
   function load() {
@@ -135,6 +135,15 @@
     // 메뉴 밖을 눌렀으면 닫는다. 그 클릭의 원래 동작(상세 이동 등)은 이어서 처리한다.
     var rtClosed = UI.closeRtMenu();
 
+    // 팔로우 버튼은 [data-account] 행 안에 있다 — 먼저 잡지 않으면 눌러도 프로필만 열린다
+    // (반응 버튼·아바타와 같은 함정). 하루를 안 쓰므로 refresh만 하면 된다.
+    var follow = e.target.closest("[data-follow]");
+    if (follow) {
+      game.toggleFollow(follow.dataset.follow);
+      save(game.getState());
+      refresh();
+      return;
+    }
     var react = e.target.closest("[data-react]");
     if (react) {
       game.toggleReaction(react.dataset.reactId, react.dataset.react);

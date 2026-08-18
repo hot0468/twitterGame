@@ -70,7 +70,9 @@
       // npcTweets: 계정별 트윗 보관함 { "@handle": [트윗] }. 그 계정의 프로필이 이걸 그린다.
       // npcSeen: 그 계정을 처음 본 날 { "@handle": day }. 보관함이 이 날부터 자란다.
       // reacted: 내가 좋아요·리트윗한 남의 트윗 { "tw12": { like: true, rt: true } }.
-      npcTweets: {}, npcSeen: {}, reacted: {},
+      // following: 내가 팔로우한 계정 { "@handle": true }. 발견(npcSeen)과 별개다 —
+      // 만난 계정이라도 팔로우해야 그 트윗이 홈 타임라인에 흐른다.
+      npcTweets: {}, npcSeen: {}, reacted: {}, following: {},
       feed: [], tweetLog: [], activeEvents: [], eventHistory: [], ending: null
     };
   }
@@ -113,6 +115,10 @@
     // 알림 읽음 기준이 없던 세이브는 지금까지를 다 읽은 것으로 본다 — 켜자마자 수십 개가 안 읽음으로
     // 뜨면 안 된다. feed.length는 알림 종류만 센 게 아니라 넉넉하지만 안 읽은 수는 0으로 잘려 안전하다.
     if (missing.notifSeen) state.notifSeen = state.feed.length;
+    // 팔로우가 없던 세이브는 이미 발견한 계정을 전부 팔로우 중으로 본다 —
+    // 그전엔 발견이 곧 팔로우였으므로, 안 채우면 켜자마자 타임라인이 텅 빈다.
+    if (missing.following)
+      Object.keys(state.npcSeen).forEach(function (h) { state.following[h] = true; });
 
     // 남의 트윗에 반응 버튼이 생기면서 좋아요·리트윗 수가 필요해졌다.
     // 옛 세이브의 트윗에는 없으므로 여기서 채운다 — 안 채우면 전부 0으로 보인다.
@@ -134,6 +140,7 @@
       var opening = [];
       drawFrom(genAccounts(), tl.startFollowing || 0).forEach(function (npc) {
         state.npcSeen[npc.handle] = state.day;
+        state.following[npc.handle] = true;
         ensureBox(npc);
         // 보관함은 과거→최신 순이라 뒤에서 잘라야 "최근" 트윗이 나온다
         opening = opening.concat(state.npcTweets[npc.handle].slice(-(tl.openingTweets || 0)));
@@ -372,7 +379,8 @@
 
       // 팔로잉 타임라인. 두 단계로 갈린다:
       //   1) 발견한 계정은 전부 매일 보관함을 채운다 → 그 계정 프로필에 쌓인다.
-      //   2) 그중 몇 계정의 오늘 트윗만 내 홈 타임라인에 흐른다.
+      //   2) 그중 "팔로우한" 계정 몇 곳의 오늘 트윗만 내 홈 타임라인에 흐른다.
+      // 보관함은 팔로우와 무관하게 자란다 — 실제 트위터도 내가 안 팔로우해도 그 계정은 계속 쓴다.
       // 전원을 타임라인에 띄우면 하루에 30개가 쏟아진다. 못 본 트윗은 프로필에서 본다 —
       // 실제 트위터에서도 팔로잉 전원의 트윗을 다 보지는 않는다.
       var gen = genRules();
@@ -385,7 +393,8 @@
           today[npc.handle] = addTweets(npc, gen.perDay, function () { return state.day; });
         });
         // drawFrom으로 뽑으므로 같은 계정이 하루에 두 번 타임라인에 뜨지 않는다
-        drawFrom(live, perDay).forEach(function (npc) {
+        var followed = live.filter(function (n) { return state.following[n.handle]; });
+        drawFrom(followed, perDay).forEach(function (npc) {
           feedItems.push(pick(today[npc.handle]));
         });
       }
@@ -449,6 +458,15 @@
     // 남의 트윗에 좋아요·리트윗. **하루를 소모하지 않는다** — 날짜를 넘기는 건 advanceTurn뿐이다.
     // 좋아요 한 번에 하루가 가면 못 쓸 기능이 된다. 스탯에도 영향을 주지 않는다(반응은 448개
     // 트윗에 다 누를 수 있어서, 팔로워를 주면 공짜 성장 경로가 된다).
+    // 팔로우 토글. 반응과 같은 부류다 — 하루를 안 쓰고 스탯도 안 건드린다.
+    // 바꾸는 건 "내 홈 타임라인에 누가 흐르는가" 하나뿐이다.
+    function toggleFollow(handle) {
+      if (!handle || !npcHandles[handle]) return null;
+      if (state.following[handle]) delete state.following[handle];
+      else state.following[handle] = true;
+      return { handle: handle, on: !!state.following[handle] };
+    }
+
     function toggleReaction(tweetId, kind) {
       if (!tweetId || (kind !== "like" && kind !== "rt")) return null;
       var r = state.reacted[tweetId] || (state.reacted[tweetId] = {});
@@ -461,7 +479,7 @@
 
     return { getState: function () { return state; }, getActions: getActions,
       previewAction: previewAction, advanceTurn: advanceTurn,
-      toggleReaction: toggleReaction };
+      toggleReaction: toggleReaction, toggleFollow: toggleFollow };
   }
 
   return { _utils: { compare: compare, checkCond: checkCond, evalFormula: evalFormula,
