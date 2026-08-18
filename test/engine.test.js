@@ -116,15 +116,23 @@ console.log("Task 2 OK");
 // --- Task 3: advanceTurn(actionId, doTweet) ---
 function fixedRng() { return 0; } // 항상 0 → 템플릿/리플 첫 항목, 확률 이벤트는 전부 발동
 
-// 새 게임은 팔로우 계정 몇 곳의 최근 트윗이 타임라인에 미리 깔린다(첫 화면이 비면 안 된다).
+// startFollowing이 0이면 아무도 안 팔로우한 채로 시작한다 — 첫 화면은 빈 타임라인이다.
+// 0보다 크면 그 계정들의 최근 트윗을 미리 깔아준다(아래에서 그 경로도 따로 검사한다).
 var TLC = loadData().timeline;
 var openingCount = TLC.startFollowing * TLC.openingTweets;
 
-// 보관함 자체를 보는 테스트는 이 미리 깔기를 끄고 본다 — 안 그러면 어느 계정이 뽑히는지에 흔들린다
+// 보관함 자체를 보는 테스트는 미리 깔기를 끄고 본다 — 안 그러면 어느 계정이 뽑히는지에 흔들린다
 function loadSolo() {
   var d = loadData();
   d.timeline = JSON.parse(JSON.stringify(d.timeline));
   d.timeline.startFollowing = 0;
+  return d;
+}
+// 미리 깔기 경로 자체는 계속 살아 있어야 한다 — 노브를 다시 올릴 수 있어야 하므로
+function loadWithFollowing(n) {
+  var d = loadData();
+  d.timeline = JSON.parse(JSON.stringify(d.timeline));
+  d.timeline.startFollowing = n;
   return d;
 }
 
@@ -579,14 +587,36 @@ assert.ok(withBreak.length > allGen.length * 0.2,
 assert.strictEqual(allGen.filter(function (t) { return /^\s|\s$/.test(t.text); }).length, 0,
   "앞뒤에 공백·줄바꿈이 남은 트윗이 있다");
 
-// 첫 화면이 빈 타임라인이면 안 된다 — 가입할 때 팔로우한 계정들의 최근 트윗이 깔려 있어야 한다
-var gNew = Engine.create(loadData(), null, function () { return 0.5; });
+// 새 게임은 아무도 안 팔로우한 채로 시작한다(startFollowing 0) — 첫 화면이 빈 타임라인이고,
+// 트윗을 올려 반응이 오면 그때부터 계정을 만나 직접 팔로우해 나간다.
+var gEmpty = Engine.create(loadData(), null, function () { return 0.5; });
+var est = gEmpty.getState();
+assert.strictEqual(TLC.startFollowing, 0, "지금 규칙은 0에서 시작이다");
+assert.deepStrictEqual(est.feed, [], "첫 화면은 빈 타임라인이다");
+assert.deepStrictEqual(est.following, {}, "아무도 팔로우하지 않은 채로 시작한다");
+assert.deepStrictEqual(est.npcSeen, {}, "만난 계정도 없다");
+// 빈 채로 끝나면 게임이 아니다 — 한 턴만 돌려도 계정을 만나야 팔로우할 거리가 생긴다
+gEmpty.advanceTurn("meme", true);
+assert.ok(Object.keys(est.npcSeen).length > 0,
+  "한 턴이면 계정을 만난다 (실제 " + Object.keys(est.npcSeen).length + "개)");
+assert.deepStrictEqual(est.following, {}, "만났다고 저절로 팔로우되지는 않는다");
+// 만난 계정을 팔로우하면 다음 턴부터 그 계정 트윗이 홈에 흐른다
+var pick1 = Object.keys(est.npcSeen)[0];
+gEmpty.toggleFollow(pick1);
+gEmpty.advanceTurn("meme", true);
+assert.ok(est.feed.filter(function (f) {
+  return f.kind === "npc" && f.author === pick1;
+}).length > 0, "팔로우하면 그 계정 트윗이 홈에 흐른다");
+
+// 미리 깔기 경로는 노브를 올리면 그대로 동작해야 한다 (0으로 두었다고 죽으면 안 된다)
+var PRE = 3;
+var gNew = Engine.create(loadWithFollowing(PRE), null, function () { return 0.5; });
 var nst = gNew.getState();
-assert.strictEqual(nst.feed.length, openingCount,
-  "첫 타임라인에 " + openingCount + "개가 깔린다 (실제 " + nst.feed.length + ")");
-assert.ok(nst.feed.length > 0, "첫 화면이 비어 있으면 안 된다");
-assert.strictEqual(Object.keys(nst.npcSeen).length, TLC.startFollowing,
-  "가입 시 " + TLC.startFollowing + "계정을 팔로우한 상태로 시작한다");
+assert.strictEqual(nst.feed.length, PRE * TLC.openingTweets,
+  "startFollowing " + PRE + "이면 " + (PRE * TLC.openingTweets) + "개가 깔린다");
+assert.strictEqual(Object.keys(nst.npcSeen).length, PRE, PRE + "계정을 발견 상태로 시작한다");
+assert.deepStrictEqual(Object.keys(nst.following).slice().sort(),
+  Object.keys(nst.npcSeen).slice().sort(), "그 계정들은 팔로우도 돼 있다");
 nst.feed.forEach(function (f) {
   assert.strictEqual(f.kind, "npc", "첫 타임라인은 남의 트윗만 (내 트윗은 아직 없다)");
   assert.ok(f.day < 1, "내가 가입하기 전(1일차 이전) 트윗이다: " + f.day + "일");
@@ -694,12 +724,14 @@ gFix.getState().npcTweets[h0].forEach(function (t) {
 // "내 홈 타임라인에 누가 흐르는가" 하나뿐이다.
 var gF = Engine.create(loadData(), null, function () { return 0.99; });
 var sF = gF.getState();
+// 지금은 0에서 시작하므로, 팔로우 토글을 보려면 먼저 계정을 만나 팔로우해야 한다
+gF.advanceTurn("meme", true);
+assert.ok(Object.keys(sF.npcSeen).length > 0, "한 턴이면 계정을 만난다");
+var fH = Object.keys(sF.npcSeen)[0];
+assert.strictEqual(sF.following[fH], undefined, "만났을 뿐 아직 팔로우가 아니다");
+gF.toggleFollow(fH);
 var startFollow = Object.keys(sF.following);
-assert.ok(startFollow.length > 0, "새 게임은 몇 계정을 팔로우한 채 시작한다");
-assert.deepStrictEqual(startFollow.slice().sort(), Object.keys(sF.npcSeen).slice().sort(),
-  "시작 계정은 발견과 팔로우가 같다");
-
-var fH = startFollow[0];
+assert.deepStrictEqual(startFollow, [fH], "내가 고른 계정만 팔로우된다");
 var dayBefore = sF.day, statsBefore = JSON.stringify(sF.stats);
 assert.deepStrictEqual(gF.toggleFollow(fH), { handle: fH, on: false }, "누르면 언팔로우");
 assert.strictEqual(sF.following[fH], undefined, "언팔로우하면 기록이 지워진다");
@@ -711,8 +743,11 @@ assert.strictEqual(gF.toggleFollow(null), null, "빈 입력은 null");
 
 // 전부 언팔로우하면 홈 타임라인에 남의 트윗이 안 흐른다. 그래도 보관함은 계속 자란다 —
 // 실제 트위터도 내가 안 팔로우해도 그 계정은 계속 쓰고, 프로필에 들어가면 보인다.
+// 보관함은 발견한 "다음" 턴부터 자란다 — 한 턴 돌려야 비교할 대상이 생긴다
+gF.advanceTurn("rest", false);
 Object.keys(sF.following).forEach(function (h) { gF.toggleFollow(h); });
 var boxBefore = sF.npcTweets[fH].length;
+assert.ok(boxBefore > 0, "발견 다음 턴이면 보관함이 생겨 있다");
 var rF = gF.advanceTurn("rest", false);
 assert.strictEqual(rF.feedItems.filter(function (f) { return f.kind === "npc"; }).length, 0,
   "아무도 안 팔로우하면 남의 트윗이 타임라인에 안 뜬다");
@@ -798,6 +833,10 @@ assert.deepStrictEqual(gD.getDmChoices(h1), [], "더 고를 말이 없다");
 // DM 도착: 하루 한 통까지, 만난 계정에서만, 안 쓴 인사말로만
 var gA = Engine.create(loadData(), null, function () { return 0.01; }); // 항상 발동
 var sA = gA.getState();
+// 만나야 DM이 온다. 0에서 시작하므로 먼저 트윗을 올려 DM 계정을 만난다.
+var metGuard = 0;
+while (!gA.dmAccounts().length && metGuard++ < 60) gA.advanceTurn("meme", true);
+assert.ok(gA.dmAccounts().length > 0, "몇 턴이면 DM 계정을 만난다 (" + metGuard + "턴)");
 var beforeA = gA.unreadDms();
 gA.advanceTurn("rest", false);
 var arrived = gA.unreadDms() - beforeA;
