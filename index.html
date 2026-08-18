@@ -90,6 +90,8 @@
           </div>
           <div class="profile-counts">
             <span><b id="profile-tweet-count">0</b> 게시물</span>
+            <!-- 내 프로필에만 뜬다. 남이 누굴 팔로우하는지는 데이터가 없다 -->
+            <button id="profile-following-count" class="count-btn hidden"><b id="profile-following">0</b> 팔로우 중</button>
             <span><b id="profile-followers">10</b> 팔로워</span>
           </div>
         </div>
@@ -119,6 +121,15 @@
           <button class="tab-btn search-tab" data-stab="accounts">계정</button>
         </div>
         <div id="search-results" class="feed"></div>
+      </section>
+
+      <!-- 내가 팔로우한 계정 목록. 프로필의 "팔로우 중" 숫자를 눌러 들어온다 -->
+      <section id="view-following" class="view hidden">
+        <div class="detail-head">
+          <button id="following-back" class="icon-btn" data-icon="arrow-left" aria-label="뒤로"></button>
+          <h2>팔로우 중</h2>
+        </div>
+        <div id="following-list"></div>
       </section>
 
       <!-- 쪽지: 목록과 대화방을 한 뷰에서 그린다 (프로필과 같은 방식 — dmHandle이 null이면 목록) -->

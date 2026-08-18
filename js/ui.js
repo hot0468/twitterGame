@@ -444,6 +444,32 @@
     if (!box.children.length) renderFeed(box, [], "일치하는 계정이 없습니다.");
   }
 
+  // ── 팔로우 중 목록 ─────────────────────────────
+  // 프로필의 "팔로우 중" 숫자로 들어온다. 뒤로가면 온 화면으로 (상세와 같은 규칙).
+  var followingReturnView = "profile";
+  function openFollowing() {
+    if (currentView !== "following") followingReturnView = currentView;
+    switchView("following");
+  }
+  function closeFollowing() { switchView(followingReturnView); }
+
+  function renderFollowing(state) {
+    var box = $("following-list");
+    box.innerHTML = "";
+    // 팔로워 수가 큰 순 — 레일 목록과 같은 정렬이라 순서가 왔다갔다 하지 않는다
+    var list = ((typeof GAME_DATA !== "undefined" && GAME_DATA.npcs) || [])
+      .filter(function (n) { return followingNow[n.handle]; })
+      .sort(function (a, b) { return (b.followers || 0) - (a.followers || 0); });
+    if (!list.length) {
+      var none = document.createElement("div");
+      none.className = "rail-empty";
+      none.textContent = "팔로우 중인 계정이 없습니다.";
+      box.appendChild(none);
+      return;
+    }
+    list.forEach(function (n) { box.appendChild(accountRow(n)); });
+  }
+
   // ── 쪽지 ───────────────────────────────────────
   // 프로필과 같은 방식이다: dmHandle이 null이면 대화방 목록, 핸들이면 그 대화방.
   var dmHandle = null;
@@ -714,6 +740,9 @@
     $("profile-tweet-count").textContent = posts.length.toLocaleString();
     $("profile-followers").textContent =
       (npc ? (npc.followers || 0) : state.followers).toLocaleString();
+    // 내가 몇 계정을 팔로우하는지는 내 프로필에서만 안다 — 남이 누굴 팔로우하는지는 데이터가 없다
+    $("profile-following-count").classList.toggle("hidden", !!npc);
+    $("profile-following").textContent = Object.keys(followingNow).length.toLocaleString();
 
     renderFeed($("profile-tweets"),
       profileTab === "posts" ? posts : replies,
@@ -754,6 +783,7 @@
     renderRailAccounts(state);
     renderRailTrends(state);
     renderSearch(state);
+    renderFollowing(state);
     renderDm(state);
     // 마운트 지점이 둘(데스크톱=사이드바, 모바일=상단 스트립) — CSS가 하나만 보여준다
     document.querySelectorAll("[data-stats]").forEach(function (panel) {
@@ -885,7 +915,7 @@
 
   function switchView(name) {
     currentView = name;
-    ["home", "profile", "notif", "tweet", "search", "dm"].forEach(function (v) {
+    ["home", "profile", "notif", "tweet", "search", "dm", "following"].forEach(function (v) {
       document.getElementById("view-" + v).classList.toggle("hidden", v !== name);
     });
     // [data-view]로 한정 — 스탯 토글도 .nav-btn이지만 뷰가 없어서 여기 끼면 active가 꼬인다
@@ -908,6 +938,7 @@
     toggleRtMenu: toggleRtMenu, closeRtMenu: closeRtMenu, rtMenuOpen: rtMenuOpen,
     openSearch: openSearch, closeSearch: closeSearch,
     setSearchQuery: setSearchQuery, setSearchTab: setSearchTab,
-    openDm: openDm, dmBack: dmBack, dmOpenHandle: dmOpenHandle };
+    openDm: openDm, dmBack: dmBack, dmOpenHandle: dmOpenHandle,
+    openFollowing: openFollowing, closeFollowing: closeFollowing };
 })();
 if (typeof module !== "undefined") module.exports = UI;

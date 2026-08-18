@@ -211,6 +211,12 @@
   document.getElementById("rail-search").onclick = gotoSearch;
   document.getElementById("search-back").onclick = function () { UI.closeSearch(); refresh(); };
   document.getElementById("dm-back").onclick = function () { UI.dmBack(); refresh(); };
+  document.getElementById("profile-following-count").onclick = function () {
+    UI.openFollowing(); refresh();
+  };
+  document.getElementById("following-back").onclick = function () {
+    UI.closeFollowing(); refresh();
+  };
   // 입력할 때마다 바로 걸러준다. refresh()가 입력창 값을 건드리지 않으므로 포커스가 유지된다
   searchInput.oninput = function () { UI.setSearchQuery(searchInput.value); refresh(); };
   document.querySelectorAll(".search-tab").forEach(function (btn) {

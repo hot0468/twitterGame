@@ -322,6 +322,10 @@ body { background: var(--bg); color: var(--text); font-size: var(--fs-sm);
 .profile-counts { display: flex; gap: 18px; margin-top: 10px;
   color: var(--muted); font-size: var(--fs-sm); }
 .profile-counts b { color: var(--text); }
+/* 숫자를 눌러 목록으로 간다는 게 읽혀야 한다 (실제 X도 밑줄로 표시) */
+.count-btn { background: none; border: none; padding: 0; cursor: pointer;
+  color: var(--muted); font-size: var(--fs-sm); font-family: inherit; }
+.count-btn:hover { text-decoration: underline; }
 
 .profile-tabs { display: flex; border-bottom: 1px solid var(--border); }
 .tab-btn { flex: 1; position: relative; background: none; border: none; cursor: pointer;
