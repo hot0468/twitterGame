@@ -168,7 +168,7 @@ var UI = (function () {
     return div;
   }
 
-  // "밈수집가 님이" / "밈수집가 님과 불씨 님이" / "밈수집가 님 외 78명이"
+  // "짤줍 님이" / "짤줍 님과 할말은함 님이" / "짤줍 님 외 78명이"
   function actorPhrase(item) {
     var names = item.actors.map(function (a) { return a.name; });
     if (item.others > 0) return names[0] + " 님 외 " + item.others.toLocaleString() + "명이";

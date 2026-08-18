@@ -12,7 +12,7 @@ GAME_DATA.events = [
   { id: "backlash",
     trigger: { "논란성": ">=20", chance: 0.4 },
     stages: [
-      { feed: ["빅계정 불씨(@fire_starter)가 내 트윗을 인용하며 저격했다: \"이 사람 말 다 틀렸음\""],
+      { feed: ["빅계정 할말은함(@fire_starter)이 내 트윗을 인용하며 저격했다: \"이 사람 말 다 틀렸음\""],
         choices: [
           { label: "사과문 올리기", effects: { "팔로워": -200, "멘탈": -10, "논란성": -10 }, next: "end" },
           { label: "맞받아치기", requires: { "멘탈": 30 }, effects: { "논란성": 10, "멘탈": -5 }, next: 1 },
