@@ -453,13 +453,19 @@
   }
   function closeFollowing() { switchView(followingReturnView); }
 
+  // 프로필의 숫자와 이 목록은 반드시 같은 곳에서 나와야 한다. state.following의 키를
+  // 그냥 세면, 지금 데이터에 없는 핸들이 세이브에 남았을 때 "4인데 목록엔 3개"가 된다.
+  // 팔로워 수가 큰 순 — 레일 목록과 같은 정렬이라 순서가 왔다갔다 하지 않는다.
+  function followingList() {
+    return ((typeof GAME_DATA !== "undefined" && GAME_DATA.npcs) || [])
+      .filter(function (n) { return followingNow[n.handle]; })
+      .sort(function (a, b) { return (b.followers || 0) - (a.followers || 0); });
+  }
+
   function renderFollowing(state) {
     var box = $("following-list");
     box.innerHTML = "";
-    // 팔로워 수가 큰 순 — 레일 목록과 같은 정렬이라 순서가 왔다갔다 하지 않는다
-    var list = ((typeof GAME_DATA !== "undefined" && GAME_DATA.npcs) || [])
-      .filter(function (n) { return followingNow[n.handle]; })
-      .sort(function (a, b) { return (b.followers || 0) - (a.followers || 0); });
+    var list = followingList();
     if (!list.length) {
       var none = document.createElement("div");
       none.className = "rail-empty";
@@ -742,7 +748,7 @@
       (npc ? (npc.followers || 0) : state.followers).toLocaleString();
     // 내가 몇 계정을 팔로우하는지는 내 프로필에서만 안다 — 남이 누굴 팔로우하는지는 데이터가 없다
     $("profile-following-count").classList.toggle("hidden", !!npc);
-    $("profile-following").textContent = Object.keys(followingNow).length.toLocaleString();
+    $("profile-following").textContent = followingList().length.toLocaleString();
 
     renderFeed($("profile-tweets"),
       profileTab === "posts" ? posts : replies,
