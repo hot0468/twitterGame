@@ -647,6 +647,25 @@ assert.strictEqual(gRe.getState().reacted[someTweet.id].like, false);
 gRe.toggleReaction(someTweet.id, "rt");
 assert.strictEqual(gRe.getState().reacted[someTweet.id].rt, true);
 assert.strictEqual(gRe.getState().reacted[someTweet.id].like, false, "둘은 서로 독립이다");
+// 리트윗은 그 날짜를 남긴다 — 내 타임라인에 그날 위치로 꽂히는 근거다.
+// 바로 위에서 rt를 한 번 켰으므로 지금은 켜져 있는 상태다.
+assert.strictEqual(gRe.getState().reacted[someTweet.id].rt, true);
+assert.strictEqual(gRe.getState().reacted[someTweet.id].rtDay, gRe.getState().day,
+  "리트윗한 날이 기록된다");
+// 하루 지난 뒤 껐다 켜면 그날로 갱신된다
+var rtDay0 = gRe.getState().reacted[someTweet.id].rtDay;
+gRe.advanceTurn("rest", false);
+gRe.toggleReaction(someTweet.id, "rt"); // 끄기
+assert.strictEqual(gRe.getState().reacted[someTweet.id].rtDay, undefined,
+  "취소하면 날짜도 지운다 — 다시 리트윗하면 그날로 새로 올라와야 한다");
+gRe.toggleReaction(someTweet.id, "rt"); // 다시 켜기
+assert.strictEqual(gRe.getState().reacted[someTweet.id].rtDay, gRe.getState().day);
+assert.notStrictEqual(gRe.getState().reacted[someTweet.id].rtDay, rtDay0,
+  "다시 리트윗하면 날짜가 갱신된다");
+// 좋아요는 날짜를 안 남긴다 (타임라인에 안 뜨므로)
+gRe.toggleReaction(someTweet.id, "like");
+assert.strictEqual("likeDay" in gRe.getState().reacted[someTweet.id], false);
+
 // 엉뚱한 입력은 무시
 assert.strictEqual(gRe.toggleReaction(null, "like"), null);
 assert.strictEqual(gRe.toggleReaction(someTweet.id, "hug"), null, "모르는 종류는 무시");

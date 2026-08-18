@@ -453,6 +453,9 @@
       if (!tweetId || (kind !== "like" && kind !== "rt")) return null;
       var r = state.reacted[tweetId] || (state.reacted[tweetId] = {});
       r[kind] = !r[kind];
+      // 리트윗한 날을 남긴다 — 내 타임라인에 그 날짜로 꽂히는 근거다.
+      // 취소하면 지운다: 다시 리트윗하면 그날로 새로 올라와야 한다.
+      if (kind === "rt") { if (r.rt) r.rtDay = state.day; else delete r.rtDay; }
       return { id: tweetId, kind: kind, on: r[kind] };
     }
 

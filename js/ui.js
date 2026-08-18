@@ -128,12 +128,16 @@ var UI = (function () {
     }
     var who = item.author === "me" ? "나" : (item.name || item.author);
     var handle = item.author === "me" ? "@me" : item.author;
+    // 내가 리트윗한 항목임을 위에 표시한다 (실제 X의 "회원님이 재게시했습니다")
+    var rtLabel = item.retweetedByMe
+      ? '<div class="rt-label">' + Icons.svg("repeat-2") + "<span>내가 재게시했습니다</span></div>"
+      : "";
     var metrics = item.kind === "me"
       ? metricEl("heart", item.likes) + metricEl("repeat-2", item.rts) + metricEl("chart-column", item.views)
       : "";
     div.innerHTML =
       '<div class="avatar"' + avatarAttr(item) + ">" + avatarInner(item) + "</div>" +
-      '<div class="body"><span class="who"></span> <span class="handle"></span>' +
+      '<div class="body">' + rtLabel + '<span class="who"></span> <span class="handle"></span>' +
       '<div class="text"></div><div class="meta"><span>' + shortDate(item.day) + "</span>" + metrics +
       "</div>" + reactRow(item) + "</div>";
     div.querySelector(".who").textContent = who;
@@ -307,6 +311,28 @@ var UI = (function () {
     }));
     return out;
   }
+
+  // 내가 리트윗한 남의 트윗을 내 타임라인용 항목으로 만든다.
+  // state.reacted에서 파생하므로 리트윗을 취소하면 자동으로 사라진다 — 따로 지울 게 없다.
+  // 원본은 복사만 하고 건드리지 않는다(원본도 타임라인에 그대로 남아 있을 수 있다).
+  function myRetweets(state) {
+    var reacted = state.reacted || {};
+    var ids = Object.keys(reacted).filter(function (id) { return reacted[id].rt; });
+    if (!ids.length) return [];
+    var byId = {};
+    allTweets(state).forEach(function (t) { if (t.id) byId[t.id] = t; });
+    return ids.filter(function (id) { return byId[id]; }).map(function (id) {
+      var copy = {};
+      Object.keys(byId[id]).forEach(function (k) { copy[k] = byId[id][k]; });
+      // 타임스탬프는 원본 트윗 날짜 그대로, 정렬만 리트윗한 날로 한다
+      copy.retweetedDay = reacted[id].rtDay || byId[id].day;
+      copy.retweetedByMe = true;
+      return copy;
+    });
+  }
+
+  // 리트윗 항목은 리트윗한 날 기준으로 줄을 선다
+  function sortDay(t) { return t.retweetedDay != null ? t.retweetedDay : t.day; }
 
   // 계정 한 줄. 레일 목록과 검색 결과가 같은 모양을 쓴다.
   // data-account를 달면 기존 클릭 위임이 프로필로 보낸다.
@@ -503,7 +529,9 @@ var UI = (function () {
     var box = state.npcTweets && state.npcTweets[handle];
     var posts = npc
       ? (box ? box.slice().reverse() : byAuthor("npc"))
-      : state.tweetLog.slice().reverse();
+      // 내 프로필 게시물 = 내가 쓴 트윗 + 내가 리트윗한 트윗 (실제 X와 동일)
+      : state.tweetLog.concat(myRetweets(state))
+          .sort(function (a, b) { return sortDay(b) - sortDay(a); });
     var replies = npc ? byAuthor("reply")
       : state.feed.filter(function (f) { return f.kind === "reply"; });
 
@@ -522,7 +550,19 @@ var UI = (function () {
     reactedNow = state.reacted || {}; // 이 렌더 동안 tweetEl이 참조한다
     $("day").textContent = state.day + "일차 · " + dateLabel(state.day);
     $("followers").textContent = "팔로워 " + state.followers.toLocaleString();
-    var timeline = state.feed.filter(function (f) { return TIMELINE_KINDS.indexOf(f.kind) !== -1; });
+    // 내가 리트윗한 남의 트윗도 내 타임라인에 뜬다. 리트윗한 날 기준으로 줄을 세운다 —
+    // feed는 이미 최신순이고 Array.sort는 안정 정렬이라 같은 날 안의 순서는 유지된다.
+    // 원본이 이미 타임라인에 흘렀다면 그건 빼고 리트윗 항목만 남긴다 — 안 그러면
+    // 같은 트윗이 두 번 보인다(실제 X도 이 경우 하나로 합친다).
+    var mine = myRetweets(state);
+    var rtIds = {};
+    mine.forEach(function (t) { rtIds[t.id] = true; });
+    var timeline = state.feed
+      .filter(function (f) {
+        return TIMELINE_KINDS.indexOf(f.kind) !== -1 && !(f.id && rtIds[f.id]);
+      })
+      .concat(mine)
+      .sort(function (a, b) { return sortDay(b) - sortDay(a); });
     renderFeed($("feed"), timeline, "타임라인이 조용합니다. 첫 트윗을 써보세요.");
     renderProfile(state);
     renderTweetDetail(state);

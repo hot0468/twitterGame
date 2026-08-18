@@ -165,6 +165,11 @@ body { background: var(--bg); color: var(--text); font-size: var(--fs-sm);
 .tweet.system { background: #fef8ef; border-left-color: #d99916; }
 .tweet.system .avatar { background: #fceecf; color: #b5730e; }
 
+/* 내가 리트윗한 항목 표시. body 안 맨 위에 두면 이름 줄에 맞춰 들여써진다(실제 X와 동일) */
+.rt-label { display: flex; align-items: center; gap: 6px;
+  color: var(--muted); font-size: var(--fs-xs); font-weight: 700; margin-bottom: 2px; }
+.rt-label .icon { width: 1.15em; height: 1.15em; }
+
 /* 클릭하면 상세로 들어가는 트윗 */
 .tweet[data-detail] { cursor: pointer; }
 .tweet[data-detail]:hover { background: var(--hover); }
