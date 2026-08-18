@@ -19,7 +19,8 @@ html { font-size: 81.25%; scrollbar-gutter: stable; } /* 1rem = 13px */
   --bg: #fff;
   --text: #0f1419;
   --muted: #536471;
-  --border: #eff3f4;
+  --border: #eff3f4;    /* 구분선 (트윗 사이) */
+  --line: #cfd9de;      /* 컨트롤 테두리 (버튼·선택지) — 구분선보다 진해야 눌리는 게 읽힌다 */
   --hover: #f7f9f9;
   --accent: #1d9bf0;
   --accent-dark: #1a8cd8;
@@ -294,7 +295,7 @@ body { background: var(--bg); color: var(--text); font-size: var(--fs-sm);
 /* 아바타는 왼쪽, 팔로우 버튼은 오른쪽 위 (실제 X 배치) */
 .profile-top { padding: 0 14px; display: flex; align-items: flex-start;
   justify-content: space-between; }
-.follow-btn { margin-top: 10px; padding: 7px 16px; border: 0; border-radius: 999px;
+.follow-btn { padding: 7px 16px; border: 0; border-radius: 999px;
   background: var(--text); color: #fff; font-size: var(--fs-sm); font-weight: 700;
   cursor: pointer; white-space: nowrap; }
 .follow-btn:hover { opacity: .85; }
@@ -348,6 +349,48 @@ body { background: var(--bg); color: var(--text); font-size: var(--fs-sm);
 .btn-primary:hover { background: var(--accent-dark); }
 .btn-ghost { background: none; border: 1px solid #cfd9de; color: var(--muted); }
 .btn-ghost:hover { background: var(--hover); }
+/* ── 쪽지 ──────────────────────────────────────
+   목록 행은 트윗 줄과 같은 리듬(아바타 + 이름줄 + 본문 한 줄)을 쓴다. */
+.dm-item { display: flex; gap: 10px; padding: 11px 14px; cursor: pointer;
+  border-bottom: 1px solid var(--border); }
+.dm-item:hover { background: var(--hover); }
+.dm-id { min-width: 0; flex: 1; }
+.dm-who { display: flex; align-items: baseline; gap: 5px; }
+.dm-who b { font-size: var(--fs-base); }
+.dm-who .handle, .dm-day { color: var(--muted); font-size: var(--fs-sm); }
+.dm-who .handle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dm-who .dm-day { margin-left: auto; flex-shrink: 0; }
+/* 마지막 말은 한 줄만 — 목록에서 스캔이 되게 */
+.dm-last { color: var(--muted); font-size: var(--fs-sm); margin-top: 2px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 안 읽은 방은 굵게. 뱃지와 달리 여기선 어느 방인지가 정보다 */
+.dm-item.unread b, .dm-item.unread .dm-last { color: var(--text); font-weight: 700; }
+
+.dm-msgs { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.dm-msg { display: flex; gap: 8px; align-items: flex-end; max-width: 80%; }
+.dm-msg.me { margin-left: auto; flex-direction: row-reverse; }
+.dm-msg .avatar { width: 1.9rem; height: 1.9rem; flex-shrink: 0; }
+.dm-bubble { background: var(--border); border-radius: 18px; padding: 8px 13px; }
+.dm-msg.me .dm-bubble { background: var(--accent); color: #fff; }
+.dm-bubble p { font-size: var(--fs-base); line-height: 1.4; white-space: pre-wrap; }
+/* 날짜가 없는 말풍선(같은 날 연속)은 빈 줄이 남지 않게 접는다 */
+.dm-bubble .dm-day:not(:empty) { display: block; margin-top: 3px; font-size: var(--fs-xs); }
+.dm-msg.me .dm-bubble .dm-day { color: #dbeafe; }
+
+/* 자유 입력이 아니라 고를 말이다. 하단에 붙여 입력창 자리를 대신한다. */
+.dm-choices { position: sticky; bottom: 0; background: var(--bg);
+  border-top: 1px solid var(--border); padding: 10px 14px;
+  display: flex; flex-direction: column; gap: 7px; }
+.dm-say { text-align: left; padding: 9px 13px; border: 1px solid var(--line);
+  border-radius: 16px; background: none; color: var(--text);
+  font-size: var(--fs-base); cursor: pointer; }
+.dm-say:hover { background: var(--hover); border-color: var(--accent); color: var(--accent); }
+.dm-done { color: var(--muted); font-size: var(--fs-sm); text-align: center; padding: 4px 0; }
+
+/* 프로필 우상단: 쪽지 + 팔로우 */
+.profile-acts { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.icon-btn.round { border: 1px solid var(--line); padding: 7px; }
+
 .icon-btn { display: flex; background: none; border: none; color: var(--muted);
   padding: 5px; border-radius: 50%; cursor: pointer; }
 .icon-btn:hover { background: var(--hover); color: var(--text); }
@@ -402,6 +445,10 @@ body { background: var(--bg); color: var(--text); font-size: var(--fs-sm);
   .nav-btn.active { color: var(--accent); }
   /* 게시하기 → 우하단 + 플로팅 버튼. position: fixed라 독바 흐름에서 빠져나온다.
      독바(z-index 20)보다 위에 있어야 가려지지 않는다. */
+  /* 선택지 바는 하단 탭바 위에 앉는다 — bottom: 0이면 탭바 뒤로 들어가 못 누른다.
+     .main의 padding-bottom(탭바 높이)과 같은 값이어야 딱 맞는다. */
+  .dm-choices { bottom: 4.6rem; }
+
   .post-btn { position: fixed; right: 14px; bottom: 5.6rem; z-index: 21;
     width: 3.6rem; height: 3.6rem; padding: 0; margin: 0; border-radius: 50%;
     box-shadow: 0 2px 10px rgba(15, 20, 25, 0.3); }

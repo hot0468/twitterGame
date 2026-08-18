@@ -1,4 +1,4 @@
-// Lucide 아이콘 (lucide-static v1.31.0, ISC License) — https://lucide.dev
+﻿// Lucide 아이콘 (lucide-static v1.31.0, ISC License) — https://lucide.dev
 // 이모지 대신 사용. currentColor를 따르므로 CSS color로 색을 맞춘다.
 var Icons = (function () {
   var PATHS = {
@@ -9,6 +9,7 @@ var Icons = (function () {
     "circle-user": '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="10" r="3"/><path d="M7 20.662V19a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v1.662"/>',
     "arrow-right": '<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>',
     "arrow-left": '<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>',
+    mail: '<rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>',
     "search": '<path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/>',
     "plus": '<path d="M5 12h14"/><path d="M12 5v14"/>',
     "rotate-ccw": '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>',

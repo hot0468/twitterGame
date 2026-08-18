@@ -42,6 +42,7 @@ function loadData() {
   Object.assign(d, require("../data/economy.js"));
   Object.assign(d, require("../data/actions.js"));
   Object.assign(d, require("../data/npcs.js"));
+  Object.assign(d, require("../data/dms.js"));
   Object.assign(d, require("../data/events.js"));
   Object.assign(d, require("../data/endings.js"));
   return d;
@@ -730,5 +731,107 @@ assert.deepStrictEqual(Object.keys(gOld.getState().following).slice().sort(),
   Object.keys(oldSave.npcSeen).slice().sort(),
   "옛 세이브는 발견한 계정을 전부 팔로우 중으로 본다");
 console.log("팔로우 OK");
+
+// ── 디엠 ──────────────────────────────────────
+// 팔로우·반응과 같은 부류다: 하루를 안 쓰고 스탯도 안 건드린다.
+var DM = loadData().dm;
+var dmHandles = Object.keys(DM.accounts);
+// 계정마다 인사말과 주제가 다 있어야 한다 — 하나라도 비면 그 방이 빈칸으로 열린다
+dmHandles.forEach(function (h) {
+  var a = DM.accounts[h];
+  assert.ok(a.opens.length > 0, h + ": opens가 비었다");
+  assert.ok(a.topics.length > 0, h + ": topics가 비었다");
+  assert.ok(a.close, h + ": close가 없다");
+  a.topics.forEach(function (t, i) {
+    assert.ok(t.say && t.back, h + " topics[" + i + "]: say/back이 있어야 한다");
+  });
+  // DM 계정은 실제 NPC여야 한다 — 없는 핸들이면 아바타도 이름도 안 나온다
+  assert.ok(loadData().npcs.some(function (n) { return n.handle === h; }),
+    h + ": data/npcs.js에 없는 계정");
+});
+
+var gD = Engine.create(loadData(), null, function () { return 0.99; }); // 이벤트·DM 미발동
+var sD = gD.getState();
+assert.deepStrictEqual(sD.dms, {}, "시작 시엔 대화방이 없다");
+
+// 만나야 열린다 — 안 만난 계정은 DM 자체가 없다
+var metDm = gD.dmAccounts();
+metDm.forEach(function (h) { assert.ok(sD.npcSeen[h] != null, h + ": 만난 계정만 열린다"); });
+var unmet = dmHandles.filter(function (h) { return sD.npcSeen[h] == null; })[0];
+if (unmet) {
+  assert.strictEqual(gD.dmAccounts().indexOf(unmet), -1, "못 만난 계정은 목록에 없다");
+  assert.deepStrictEqual(gD.getDmChoices(unmet).length, DM.choices,
+    "방을 열면 그때 만들어진다"); // 열기 전엔 없다가, 열면 선택지가 나온다
+}
+assert.deepStrictEqual(gD.getDmChoices("@없는계정"), [], "DM 없는 계정은 선택지도 없다");
+assert.strictEqual(gD.sendDm("@없는계정", 0), null, "DM 없는 계정엔 못 보낸다");
+
+// 말 걸기: 내 말 + 답장이 순서대로 쌓인다
+var h1 = dmHandles[0];
+var topics = DM.accounts[h1].topics;
+var dayBefore2 = sD.day, stats2 = JSON.stringify(sD.stats), fol2 = sD.followers;
+var choices = gD.getDmChoices(h1);
+assert.strictEqual(choices.length, DM.choices, "한 번에 " + DM.choices + "개를 고른다");
+var r1 = gD.sendDm(h1, choices[0].idx);
+assert.deepStrictEqual(r1.msgs.map(function (m) { return [m.me, m.text]; }),
+  [[true, topics[choices[0].idx].say], [false, topics[choices[0].idx].back]],
+  "내 말 다음에 답장이 붙는다");
+assert.strictEqual(sD.day, dayBefore2, "디엠은 하루를 쓰지 않는다");
+assert.strictEqual(JSON.stringify(sD.stats), stats2, "디엠은 스탯을 안 건드린다");
+assert.strictEqual(sD.followers, fol2, "디엠은 팔로워를 안 건드린다");
+assert.strictEqual(gD.unreadDms(), 0, "내가 연 방은 바로 읽음 처리된다");
+
+// 한 번 쓴 말은 다시 안 나온다
+assert.strictEqual(gD.getDmChoices(h1).some(function (c) { return c.idx === choices[0].idx; }),
+  false, "이미 쓴 말은 선택지에서 빠진다");
+assert.strictEqual(gD.sendDm(h1, choices[0].idx), null, "같은 말을 두 번 못 보낸다");
+
+// 다 쓰면 그 계정이 대화를 닫는다
+while (gD.getDmChoices(h1).length) gD.sendDm(h1, gD.getDmChoices(h1)[0].idx);
+var msgs1 = sD.dms[h1].msgs;
+assert.strictEqual(msgs1[msgs1.length - 1].text, DM.accounts[h1].close,
+  "말이 떨어지면 마무리 인사로 닫힌다");
+assert.strictEqual(msgs1.filter(function (m) { return m.me; }).length, topics.length,
+  "내가 보낸 말이 주제 수만큼 남는다");
+assert.deepStrictEqual(gD.getDmChoices(h1), [], "더 고를 말이 없다");
+
+// DM 도착: 하루 한 통까지, 만난 계정에서만, 안 쓴 인사말로만
+var gA = Engine.create(loadData(), null, function () { return 0.01; }); // 항상 발동
+var sA = gA.getState();
+var beforeA = gA.unreadDms();
+gA.advanceTurn("rest", false);
+var arrived = gA.unreadDms() - beforeA;
+assert.strictEqual(arrived, 1, "한 턴에 최대 한 통 (실제 " + arrived + ")");
+var got = Object.keys(sA.dms).filter(function (h) { return sA.dms[h].msgs.length; });
+got.forEach(function (h) {
+  assert.ok(sA.npcSeen[h] != null, h + ": 안 만난 계정이 DM을 보냈다");
+  sA.dms[h].msgs.forEach(function (m) {
+    assert.strictEqual(m.me, false, "먼저 온 DM은 상대 말이다");
+    assert.ok(DM.accounts[h].opens.indexOf(m.text) !== -1, "인사말 중 하나여야 한다");
+  });
+});
+// 읽으면 뱃지가 꺼진다
+gA.markDmRead(got[0]);
+assert.strictEqual(gA.unreadDms(), 0, "방을 읽으면 안 읽은 수가 0이 된다");
+
+// 인사말은 다 쓰면 반복되지 않는다 — 같은 문장이 계속 오면 안 된다
+var maxOpens = dmHandles.reduce(function (n, h) { return n + DM.accounts[h].opens.length; }, 0);
+for (var i = 0; i < 120; i++) gA.advanceTurn("rest", false);
+var texts = [];
+Object.keys(sA.dms).forEach(function (h) {
+  sA.dms[h].msgs.filter(function (m) { return !m.me; })
+    .forEach(function (m) { texts.push(h + "|" + m.text); });
+});
+assert.strictEqual(texts.length, new Set(texts).size,
+  "같은 인사말이 두 번 오지 않는다 (" + texts.length + "통)");
+assert.ok(texts.length <= maxOpens, "인사말 총량을 넘지 않는다");
+
+// 구버전 세이브: dms가 없어도 터지지 않는다
+var oldD = JSON.parse(JSON.stringify(gA.getState()));
+delete oldD.dms;
+var gOldD = Engine.create(loadData(), oldD, function () { return 0.99; });
+assert.deepStrictEqual(gOldD.getState().dms, {}, "dms 없던 세이브는 빈 대화방으로 시작");
+assert.strictEqual(gOldD.unreadDms(), 0);
+console.log("디엠 OK (" + dmHandles.length + "계정, 인사말 " + maxOpens + "개)");
 
 console.log("Task 6 OK");

@@ -18,7 +18,7 @@
   save(game.getState());
   var pendingAction = null;
 
-  function refresh() { UI.renderAll(game.getState()); }
+  function refresh() { UI.renderAll(game.getState(), game); }
 
   // 행동을 실제로 적용하고 하루를 넘긴다.
   // 날짜 전환은 팝업 없이 조용히 넘어간다 — 주급날에만 정산 팝업을 띄우고, 닫힌 뒤 연출·엔딩.
@@ -74,6 +74,8 @@
       if (btn.dataset.view === "profile") UI.openProfile(null);
       // 검색은 입력창에 포커스까지 줘야 바로 타이핑할 수 있다 (모바일의 유일한 입구)
       else if (btn.dataset.view === "search") { UI.openSearch(); focusSearch = true; }
+      // 쪽지도 항상 목록으로 — 열어둔 대화방이 남아 있으면 어디로 들어왔는지 헷갈린다
+      else if (btn.dataset.view === "dm") UI.openDm(null);
       else UI.switchView(btn.dataset.view);
       closePopovers();
       // 알림을 열면 읽은 것으로 처리한다 — 뱃지가 사라지고 그 상태가 저장돼야 한다
@@ -135,6 +137,24 @@
     // 메뉴 밖을 눌렀으면 닫는다. 그 클릭의 원래 동작(상세 이동 등)은 이어서 처리한다.
     var rtClosed = UI.closeRtMenu();
 
+    // 쪽지: 대화방 열기(목록 행·프로필 버튼)와 말 걸기.
+    // 방을 열면 읽은 것으로 처리한다 — 알림과 같은 규칙이다.
+    var dmSay = e.target.closest("[data-dm-say]");
+    if (dmSay) {
+      game.sendDm(dmSay.dataset.dmTo, Number(dmSay.dataset.dmSay));
+      save(game.getState());
+      refresh();
+      return;
+    }
+    var dmOpen = e.target.closest("[data-dm]");
+    if (dmOpen) {
+      closePopovers();
+      game.markDmRead(dmOpen.dataset.dm);
+      UI.openDm(dmOpen.dataset.dm);
+      save(game.getState());
+      refresh();
+      return;
+    }
     // 팔로우 버튼은 [data-account] 행 안에 있다 — 먼저 잡지 않으면 눌러도 프로필만 열린다
     // (반응 버튼·아바타와 같은 함정). 하루를 안 쓰므로 refresh만 하면 된다.
     var follow = e.target.closest("[data-follow]");
@@ -190,6 +210,7 @@
 
   document.getElementById("rail-search").onclick = gotoSearch;
   document.getElementById("search-back").onclick = function () { UI.closeSearch(); refresh(); };
+  document.getElementById("dm-back").onclick = function () { UI.dmBack(); refresh(); };
   // 입력할 때마다 바로 걸러준다. refresh()가 입력창 값을 건드리지 않으므로 포커스가 유지된다
   searchInput.oninput = function () { UI.setSearchQuery(searchInput.value); refresh(); };
   document.querySelectorAll(".search-tab").forEach(function (btn) {

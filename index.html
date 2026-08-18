@@ -15,6 +15,7 @@
       <button class="nav-btn" data-view="search"><span data-icon="search"></span><span class="label">검색</span></button>
       <!-- 뱃지는 아이콘 우측 상단에 붙는다. [data-icon] 안에 넣으면 Icons.mount()가 innerHTML로 덮어쓴다 -->
       <button class="nav-btn" data-view="notif"><span class="nav-icon"><span data-icon="bell"></span><span id="notif-badge" class="badge hidden"></span></span><span class="label">알림</span></button>
+      <button class="nav-btn" data-view="dm"><span class="nav-icon"><span data-icon="mail"></span><span id="dm-badge" class="badge hidden"></span></span><span class="label">쪽지</span></button>
       <button class="nav-btn" data-view="profile"><span data-icon="user"></span><span class="label">프로필</span></button>
       <!-- 모바일 독바에만 보이는 스탯 팝오버 토글 (데스크톱은 사이드바에 스탯이 상주하므로 숨김) -->
       <button id="stats-toggle" class="nav-btn stats-toggle" aria-expanded="false"><span data-icon="chart-column"></span><span class="label">스탯</span></button>
@@ -73,8 +74,11 @@
         <div class="profile-banner"></div>
         <div class="profile-top">
           <div class="avatar big"><img id="profile-pfp" class="pfp" alt="" src="assets/avatars/me.svg"></div>
-          <!-- 남의 프로필에만 뜬다 -->
-          <button id="profile-follow" class="follow-btn hidden">팔로우</button>
+          <!-- 남의 프로필에만 뜬다. DM은 말을 튼 계정에만 -->
+          <div class="profile-acts">
+            <button id="profile-dm" class="icon-btn round hidden" data-icon="mail" aria-label="쪽지 보내기"></button>
+            <button id="profile-follow" class="follow-btn hidden">팔로우</button>
+          </div>
         </div>
         <div class="profile-info">
           <h2 id="profile-name" class="profile-name">나</h2>
@@ -115,6 +119,20 @@
           <button class="tab-btn search-tab" data-stab="accounts">계정</button>
         </div>
         <div id="search-results" class="feed"></div>
+      </section>
+
+      <!-- 쪽지: 목록과 대화방을 한 뷰에서 그린다 (프로필과 같은 방식 — dmHandle이 null이면 목록) -->
+      <section id="view-dm" class="view hidden">
+        <div class="detail-head">
+          <button id="dm-back" class="icon-btn hidden" data-icon="arrow-left" aria-label="뒤로"></button>
+          <h2 id="dm-title">쪽지</h2>
+        </div>
+        <div id="dm-list"></div>
+        <div id="dm-room" class="dm-room hidden">
+          <div id="dm-msgs" class="dm-msgs"></div>
+          <!-- 자유 입력이 아니라 고를 말이다. 다 떨어지면 안내가 뜬다 -->
+          <div id="dm-choices" class="dm-choices"></div>
+        </div>
       </section>
 
       <!-- 트윗 상세: 원본 트윗 + 거기 달린 답글. 홈 타임라인에는 답글이 안 뜬다 -->
@@ -196,6 +214,7 @@
   <script src="data/economy.js"></script>
   <script src="data/actions.js"></script>
   <script src="data/npcs.js"></script>
+  <script src="data/dms.js"></script>
   <script src="data/events.js"></script>
   <script src="data/endings.js"></script>
   <script src="js/engine.js"></script>

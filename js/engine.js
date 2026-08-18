@@ -72,7 +72,9 @@
       // reacted: 내가 좋아요·리트윗한 남의 트윗 { "tw12": { like: true, rt: true } }.
       // following: 내가 팔로우한 계정 { "@handle": true }. 발견(npcSeen)과 별개다 —
       // 만난 계정이라도 팔로우해야 그 트윗이 홈 타임라인에 흐른다.
-      npcTweets: {}, npcSeen: {}, reacted: {}, following: {},
+      // dms: 계정별 대화방 { "@h": { msgs: [{me,text,day}], used: [주제idx], opened: [인사idx], seen: n } }.
+      // feed와 별개다 — 실제 X도 DM은 알림이 아니라 자기 뱃지를 쓴다.
+      npcTweets: {}, npcSeen: {}, reacted: {}, following: {}, dms: {},
       feed: [], tweetLog: [], activeEvents: [], eventHistory: [], ending: null
     };
   }
@@ -415,6 +417,17 @@
           });
       });
 
+      // 디엠 도착. 이미 만난 DM 계정 중 인사말이 남은 곳에서 하루 한 통까지.
+      // 팔로우와 무관하다 — 안 팔로우해도 DM은 온다(실제 X와 동일).
+      if (data.dm && rand() < (data.dm.chance || 0)) {
+        var callers = dmAccounts().filter(function (h) { return unusedOpens(h).length; });
+        if (callers.length) {
+          var who = pick(callers), oi = pick(unusedOpens(who));
+          state.dms[who].opened.push(oi);
+          pushDm(who, false, data.dm.accounts[who].opens[oi]);
+        }
+      }
+
       data.events.forEach(function (ev) {
         var done = state.eventHistory.indexOf(ev.id) !== -1;
         var active = state.activeEvents.some(function (a) { return a.eventId === ev.id; });
@@ -458,6 +471,67 @@
     // 남의 트윗에 좋아요·리트윗. **하루를 소모하지 않는다** — 날짜를 넘기는 건 advanceTurn뿐이다.
     // 좋아요 한 번에 하루가 가면 못 쓸 기능이 된다. 스탯에도 영향을 주지 않는다(반응은 448개
     // 트윗에 다 누를 수 있어서, 팔로워를 주면 공짜 성장 경로가 된다).
+    // ── 디엠 ────────────────────────────────────────────
+    // 방은 처음 쓸 때 만든다. data.dm에 없는 계정은 DM 자체가 없다.
+    function dmRoom(handle) {
+      if (!data.dm || !data.dm.accounts[handle]) return null;
+      return state.dms[handle] ||
+        (state.dms[handle] = { msgs: [], used: [], opened: [], seen: 0 });
+    }
+    function pushDm(handle, me, text) {
+      state.dms[handle].msgs.push({ me: me, text: text, day: state.day });
+    }
+    // 아직 안 쓴 인사말의 인덱스. 다 쓴 계정은 더 이상 먼저 말을 걸지 않는다.
+    function unusedOpens(handle) {
+      var room = dmRoom(handle), out = [];
+      data.dm.accounts[handle].opens.forEach(function (_, i) {
+        if (room.opened.indexOf(i) === -1) out.push(i);
+      });
+      return out;
+    }
+
+    // DM이 열린 계정 = 이미 만난 DM 계정. 만나기 전엔 대화방이 아예 없다.
+    function dmAccounts() {
+      if (!data.dm) return [];
+      return Object.keys(data.dm.accounts).filter(function (h) {
+        return state.npcSeen[h] != null;
+      });
+    }
+    // 내가 고를 수 있는 말. 이미 쓴 건 안 나오고, 다 떨어지면 빈 배열이다.
+    function getDmChoices(handle) {
+      var room = dmRoom(handle);
+      if (!room) return [];
+      var out = [];
+      data.dm.accounts[handle].topics.forEach(function (t, i) {
+        if (room.used.indexOf(i) === -1) out.push({ idx: i, label: t.say });
+      });
+      return out.slice(0, data.dm.choices || 3);
+    }
+    // 말을 건다. 하루를 안 쓰고 스탯도 안 건드린다 — 팔로우·반응과 같은 부류다.
+    function sendDm(handle, idx) {
+      var room = dmRoom(handle);
+      if (!room) return null;
+      var topics = data.dm.accounts[handle].topics, topic = topics[idx];
+      if (!topic || room.used.indexOf(idx) !== -1) return null;
+      room.used.push(idx);
+      pushDm(handle, true, topic.say);
+      pushDm(handle, false, topic.back);
+      // 고를 말이 다 떨어지면 그 계정이 대화를 닫는다
+      if (room.used.length === topics.length) pushDm(handle, false, data.dm.accounts[handle].close);
+      room.seen = room.msgs.length; // 보고 있는 방이라 바로 읽음
+      return { handle: handle, msgs: room.msgs };
+    }
+    function markDmRead(handle) {
+      var room = dmRoom(handle);
+      if (room) room.seen = room.msgs.length;
+    }
+    // 안 읽은 DM 수. 어느 방을 열었는지는 UI가 알지만 셈은 여기가 안다.
+    function unreadDms() {
+      return Object.keys(state.dms).reduce(function (n, h) {
+        return n + Math.max(0, state.dms[h].msgs.length - state.dms[h].seen);
+      }, 0);
+    }
+
     // 팔로우 토글. 반응과 같은 부류다 — 하루를 안 쓰고 스탯도 안 건드린다.
     // 바꾸는 건 "내 홈 타임라인에 누가 흐르는가" 하나뿐이다.
     function toggleFollow(handle) {
@@ -479,7 +553,9 @@
 
     return { getState: function () { return state; }, getActions: getActions,
       previewAction: previewAction, advanceTurn: advanceTurn,
-      toggleReaction: toggleReaction, toggleFollow: toggleFollow };
+      toggleReaction: toggleReaction, toggleFollow: toggleFollow,
+      dmAccounts: dmAccounts, getDmChoices: getDmChoices, sendDm: sendDm,
+      markDmRead: markDmRead, unreadDms: unreadDms };
   }
 
   return { _utils: { compare: compare, checkCond: checkCond, evalFormula: evalFormula,

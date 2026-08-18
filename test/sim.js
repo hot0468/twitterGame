@@ -6,6 +6,7 @@ function loadData() {
   Object.assign(d, require("../data/economy.js"));
   Object.assign(d, require("../data/actions.js"));
   Object.assign(d, require("../data/npcs.js"));
+  Object.assign(d, require("../data/dms.js"));
   Object.assign(d, require("../data/events.js"));
   Object.assign(d, require("../data/endings.js"));
   return d;

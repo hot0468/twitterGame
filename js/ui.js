@@ -122,6 +122,8 @@
   // renderFeed·feedItemEl 서명이 전부 바뀌므로 렌더 범위 변수로 둔다.
   var reactedNow = {};
   var followingNow = {};
+  // 쪽지 선택지와 안 읽은 수는 엔진이 정한다. ui가 다시 계산하면 규칙이 두 곳으로 갈라진다.
+  var gameNow = null;
 
   // 반응은 id가 있는 남의 트윗만 — 답글은 자기 id가 없어서(replyTo만 있다) 대상이 아니고,
   // 내 트윗은 읽기 전용 수치를 보여준다.
@@ -442,6 +444,109 @@
     if (!box.children.length) renderFeed(box, [], "일치하는 계정이 없습니다.");
   }
 
+  // ── 쪽지 ───────────────────────────────────────
+  // 프로필과 같은 방식이다: dmHandle이 null이면 대화방 목록, 핸들이면 그 대화방.
+  var dmHandle = null;
+  var dmReturnView = "home";
+
+  function openDm(handle) {
+    if (currentView !== "dm") dmReturnView = currentView;
+    dmHandle = handle || null;
+    switchView("dm");
+  }
+  // 대화방에서 뒤로 = 목록으로. 목록에서 뒤로는 온 화면으로 (트윗 상세와 같은 규칙)
+  function dmBack() {
+    if (dmHandle) { dmHandle = null; return; }
+    switchView(dmReturnView);
+  }
+  function dmOpenHandle() { return dmHandle; }
+
+  function dmItem(handle, room) {
+    var npc = npcByHandle(handle);
+    var last = room.msgs[room.msgs.length - 1];
+    var row = document.createElement("div");
+    row.className = "dm-item" + (room.msgs.length - room.seen > 0 ? " unread" : "");
+    row.dataset.dm = handle;
+    row.innerHTML = '<div class="avatar small">' + pfp(handle) + "</div>" +
+      '<div class="dm-id"><div class="dm-who"><b></b><span class="handle"></span>' +
+      '<span class="dm-day"></span></div><p class="dm-last"></p></div>';
+    row.querySelector("b").textContent = npc.name;
+    row.querySelector(".handle").textContent = handle;
+    row.querySelector(".dm-day").textContent = last ? shortDate(last.day) : "";
+    // "나: "를 붙여야 마지막 말이 누구 것인지 목록에서 바로 읽힌다
+    row.querySelector(".dm-last").textContent =
+      last ? (last.me ? "나: " : "") + last.text : "아직 나눈 말이 없습니다.";
+    return row;
+  }
+
+  function renderDm(state) {
+    var accounts = gameNow ? gameNow.dmAccounts() : [];
+    var rooms = state.dms || {};
+    var room = function (h) { return rooms[h] || { msgs: [], seen: 0 }; };
+    var inRoom = dmHandle && accounts.indexOf(dmHandle) !== -1;
+
+    $("dm-back").classList.toggle("hidden", !inRoom && currentView !== "dm");
+    $("dm-title").textContent = inRoom ? npcByHandle(dmHandle).name : "쪽지";
+    $("dm-list").classList.toggle("hidden", !!inRoom);
+    $("dm-room").classList.toggle("hidden", !inRoom);
+
+    if (!inRoom) {
+      var box = $("dm-list");
+      box.innerHTML = "";
+      if (!accounts.length) {
+        var none = document.createElement("div");
+        none.className = "rail-empty";
+        // 만나야 열린다 — 첫날부터 대화방이 놓여 있으면 발견의 재미가 없다
+        none.textContent = "아직 쪽지를 나눌 계정이 없습니다.";
+        box.appendChild(none);
+        return;
+      }
+      // 최근에 말이 오간 방부터. 아직 안 연 방은 뒤로 밀린다.
+      accounts.slice().sort(function (a, b) {
+        var la = room(a).msgs, lb = room(b).msgs;
+        return (lb.length ? lb[lb.length - 1].day : -1) - (la.length ? la[la.length - 1].day : -1);
+      }).forEach(function (h) { box.appendChild(dmItem(h, room(h))); });
+      return;
+    }
+
+    var msgs = $("dm-msgs");
+    msgs.innerHTML = "";
+    // 날짜는 바뀔 때만 찍는다 — 같은 날 말풍선마다 붙으면 "3월 27일"만 열 번 읽힌다
+    var lastDay = null;
+    room(dmHandle).msgs.forEach(function (m) {
+      var el = document.createElement("div");
+      el.className = "dm-msg" + (m.me ? " me" : "");
+      el.innerHTML = (m.me ? "" : '<div class="avatar small">' + pfp(dmHandle) + "</div>") +
+        '<div class="dm-bubble"><p></p><span class="dm-day"></span></div>';
+      el.querySelector("p").textContent = m.text;
+      if (m.day !== lastDay) {
+        el.querySelector(".dm-day").textContent = shortDate(m.day);
+        lastDay = m.day;
+      }
+      msgs.appendChild(el);
+    });
+
+    // 자유 입력이 아니라 고를 말이다. 어느 말이 남았는지는 엔진이 안다.
+    var ch = $("dm-choices");
+    ch.innerHTML = "";
+    var choices = gameNow ? gameNow.getDmChoices(dmHandle) : [];
+    if (!choices.length) {
+      var done = document.createElement("p");
+      done.className = "dm-done";
+      done.textContent = "더 할 말이 떠오르지 않는다.";
+      ch.appendChild(done);
+      return;
+    }
+    choices.forEach(function (c) {
+      var b = document.createElement("button");
+      b.className = "dm-say";
+      b.dataset.dmSay = c.idx;
+      b.dataset.dmTo = dmHandle;
+      b.textContent = c.label;
+      ch.appendChild(b);
+    });
+  }
+
   // ── 우측 레일 ──────────────────────────────────
   var RAIL_LIMIT = 6;      // 처음엔 이만큼만 보이고 "더 보기"로 전부 펼친다
   var RAIL_TRENDS = 5;
@@ -567,6 +672,10 @@
     // 팔로우 버튼은 남의 프로필에만 — 내 계정은 팔로우 대상이 아니다
     var fbtn = $("profile-follow");
     fbtn.classList.toggle("hidden", !npc);
+    // 쪽지는 말을 튼 계정에만 — 전 계정에 열면 대사가 448개 트윗만큼 필요하다
+    var canDm = !!npc && gameNow && gameNow.dmAccounts().indexOf(handle) !== -1;
+    $("profile-dm").classList.toggle("hidden", !canDm);
+    if (canDm) $("profile-dm").dataset.dm = handle;
     if (npc) {
       var on = !!followingNow[handle];
       // 팔로우 중일 땐 두 글자를 다 넣고 CSS가 hover에서 갈아 끼운다 (실제 X와 동일).
@@ -613,7 +722,8 @@
         : (npc ? "내 트윗에 답글을 단 적이 없습니다." : "아직 받은 답글이 없습니다."));
   }
 
-  function renderAll(state) {
+  function renderAll(state, game) {
+    gameNow = game || gameNow;
     reactedNow = state.reacted || {}; // 이 렌더 동안 tweetEl이 참조한다
     followingNow = state.following || {}; // 같은 이유로 accountRow·renderProfile이 참조한다
     $("day").textContent = state.day + "일차 · " + dateLabel(state.day);
@@ -644,6 +754,7 @@
     renderRailAccounts(state);
     renderRailTrends(state);
     renderSearch(state);
+    renderDm(state);
     // 마운트 지점이 둘(데스크톱=사이드바, 모바일=상단 스트립) — CSS가 하나만 보여준다
     document.querySelectorAll("[data-stats]").forEach(function (panel) {
       panel.innerHTML = "";
@@ -663,6 +774,7 @@
     renderFeed($("notif-list"), notifItemsOf(state), "아직 알림이 없습니다.");
     // 안 읽은 알림이 있으면 점만 띄운다 (개수는 안 쓴다 — 뱃지는 빈 span이다)
     $("notif-badge").classList.toggle("hidden", unreadNotifs(state) === 0);
+    $("dm-badge").classList.toggle("hidden", !gameNow || gameNow.unreadDms() === 0);
   }
 
   // 돈만 원 단위로 표기한다 (엔진은 정수 원으로만 다룬다)
@@ -773,7 +885,7 @@
 
   function switchView(name) {
     currentView = name;
-    ["home", "profile", "notif", "tweet", "search"].forEach(function (v) {
+    ["home", "profile", "notif", "tweet", "search", "dm"].forEach(function (v) {
       document.getElementById("view-" + v).classList.toggle("hidden", v !== name);
     });
     // [data-view]로 한정 — 스탯 토글도 .nav-btn이지만 뷰가 없어서 여기 끼면 active가 꼬인다
@@ -795,6 +907,7 @@
     toggleRailMore: toggleRailMore,
     toggleRtMenu: toggleRtMenu, closeRtMenu: closeRtMenu, rtMenuOpen: rtMenuOpen,
     openSearch: openSearch, closeSearch: closeSearch,
-    setSearchQuery: setSearchQuery, setSearchTab: setSearchTab };
+    setSearchQuery: setSearchQuery, setSearchTab: setSearchTab,
+    openDm: openDm, dmBack: dmBack, dmOpenHandle: dmOpenHandle };
 })();
 if (typeof module !== "undefined") module.exports = UI;
