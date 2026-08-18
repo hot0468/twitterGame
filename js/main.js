@@ -36,7 +36,9 @@
     else finish();
   }
 
-  document.getElementById("compose").onclick = function () {
+  // 게시하기 — 데스크톱은 사이드바 버튼, 모바일은 우하단 + 플로팅 버튼(같은 요소다).
+  // 컴포즈 박스가 홈에만 있던 때와 달리 이제 어느 화면에서도 행동할 수 있다.
+  document.getElementById("post-btn").onclick = function () {
     if (game.getState().ending) return;
     UI.showActions(game.getActions(), function (actionId) {
       UI.hideActions();
@@ -161,6 +163,11 @@
   // 프로필 탭만 — 검색 탭은 같은 .tab-btn 모양이지만 다른 핸들러를 쓴다
   document.querySelectorAll(".profile-tabs .tab-btn[data-tab]").forEach(function (btn) {
     btn.onclick = function () { UI.setProfileTab(btn.dataset.tab); refresh(); };
+  });
+
+  // 홈 타임라인 탭 (추천 / 팔로우 중)
+  document.querySelectorAll(".home-tab").forEach(function (btn) {
+    btn.onclick = function () { UI.setHomeTab(btn.dataset.htab); refresh(); };
   });
 
   // ── 검색 ──

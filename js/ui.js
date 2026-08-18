@@ -334,6 +334,16 @@ var UI = (function () {
     return out;
   }
 
+  // 홈 타임라인 탭. 추천 = 내 타임라인 전부, 팔로우 중 = 팔로우한 계정이 쓴 글만.
+  // (내 트윗·이벤트·정산 카드를 빼고 남의 글만 읽고 싶을 때 쓰는 필터다)
+  var homeTab = "all";
+  function setHomeTab(name) {
+    homeTab = name;
+    document.querySelectorAll(".home-tab").forEach(function (b) {
+      b.classList.toggle("active", b.dataset.htab === name);
+    });
+  }
+
   // 내가 리트윗한 남의 트윗을 내 타임라인용 항목으로 만든다.
   // state.reacted에서 파생하므로 리트윗을 취소하면 자동으로 사라진다 — 따로 지울 게 없다.
   // 원본은 복사만 하고 건드리지 않는다(원본도 타임라인에 그대로 남아 있을 수 있다).
@@ -585,7 +595,14 @@ var UI = (function () {
       })
       .concat(mine)
       .sort(function (a, b) { return sortDay(b) - sortDay(a); });
-    renderFeed($("feed"), timeline, "타임라인이 조용합니다. 첫 트윗을 써보세요.");
+    if (homeTab === "following") {
+      // 팔로우한 계정이 쓴 글만 — 내 트윗·이벤트·정산은 뺀다. 내 리트윗은 남의 글이라 남긴다.
+      timeline = timeline.filter(function (f) { return f.kind === "npc"; });
+    }
+    renderFeed($("feed"), timeline,
+      homeTab === "following"
+        ? "팔로우한 계정의 글이 아직 없습니다."
+        : "타임라인이 조용합니다. 첫 트윗을 써보세요.");
     renderProfile(state);
     renderTweetDetail(state);
     renderRailAccounts(state);
@@ -734,7 +751,7 @@ var UI = (function () {
     showSettlement: showSettlement, dateLabel: dateLabel,
     animateLatestMetrics: animateLatestMetrics,
     showEnding: showEnding, switchView: switchView,
-    setProfileTab: setProfileTab, markNotifsRead: markNotifsRead,
+    setProfileTab: setProfileTab, setHomeTab: setHomeTab, markNotifsRead: markNotifsRead,
     toggleStats: toggleStats, closeStats: closeStats,
     toggleAccountMenu: toggleAccountMenu, closeAccountMenu: closeAccountMenu,
     openTweetDetail: openTweetDetail, closeTweetDetail: closeTweetDetail,

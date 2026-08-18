@@ -18,6 +18,11 @@
       <button class="nav-btn" data-view="profile"><span data-icon="user"></span><span class="label">프로필</span></button>
       <!-- 모바일 독바에만 보이는 스탯 팝오버 토글 (데스크톱은 사이드바에 스탯이 상주하므로 숨김) -->
       <button id="stats-toggle" class="nav-btn stats-toggle" aria-expanded="false"><span data-icon="chart-column"></span><span class="label">스탯</span></button>
+      <!-- 게시하기. 데스크톱은 사이드바 버튼, 모바일은 우하단 + 플로팅 버튼(CSS가 가른다) -->
+      <button id="post-btn" class="post-btn" aria-label="게시하기">
+        <span data-icon="plus"></span><span class="label">게시하기</span>
+      </button>
+
       <div class="stats-panel" data-stats></div>
 
       <!-- 실제 X 사이드바 하단의 계정 블록. 누르면 로그아웃 팝오버가 뜬다.
@@ -50,9 +55,10 @@
       <div class="stats-strip" data-stats></div>
 
       <section id="view-home" class="view">
-        <div id="compose" class="compose">
-          <div class="avatar"><img class="pfp" alt="" src="assets/avatars/me.svg"></div>
-          <div class="compose-hint">무슨 일이 일어나고 있나요?</div>
+        <!-- 실제 X의 추천/팔로잉 탭. 컴포즈 박스는 없애고 게시 버튼을 사이드바로 옮겼다 -->
+        <div class="profile-tabs home-tabs">
+          <button class="tab-btn home-tab active" data-htab="all">추천</button>
+          <button class="tab-btn home-tab" data-htab="following">팔로우 중</button>
         </div>
         <div id="feed" class="feed"></div>
       </section>
