@@ -1408,3 +1408,95 @@ assert.strictEqual(gAuthor._reactionsOn("@old_records"), 3,
   "옛 세이브도 보관함에 남은 반응은 되살린다");
 
 console.log("반응 수 유지 OK");
+
+// --- 쓰다가지움 스토리 (두 번째 스토리) ---
+// 괴담계와 정반대 조건(글빨 >= 15)이라 서로 다른 플레이어에게 열린다.
+function writerGame(overrides) {
+  var g = Engine.create(loadData());
+  var s = g.getState();
+  s.npcSeen["@rookie_writer"] = 1;
+  g.advanceTurn("rest", false);              // 보관함이 채워진다
+  s = g.getState();
+  s.stats.글빨 = 15;
+  Object.assign(s.stats, (overrides && overrides.stats) || {});
+  var box = s.npcTweets["@rookie_writer"] || [];
+  var n = overrides && overrides.reactions != null ? overrides.reactions : 5;
+  for (var i = 0; i < n && i < box.length; i++) g.toggleReaction(box[i].id, "like");
+  return g;
+}
+
+var gWr = writerGame();
+gWr.advanceTurn("rest", false);
+assert.strictEqual(gWr.getState().dmStory["@rookie_writer"].node, "w1",
+  "조건 충족 턴에 시작한다");
+
+// 글빨이 모자라면 시작 안 함
+var gWrLow = writerGame({ stats: { 글빨: 14 } });
+gWrLow.advanceTurn("rest", false);
+assert.ok(!gWrLow.getState().dmStory["@rookie_writer"], "글빨 14면 시작 안 함");
+
+// w2는 대기 — 글쓰기 연습을 해야 진행된다
+gWr.sendStory("@rookie_writer", 0);
+assert.strictEqual(gWr.getState().dmStory["@rookie_writer"].node, "w2");
+assert.deepStrictEqual(gWr.storyChoices("@rookie_writer"), [], "w2는 대기");
+
+// 산책으로는 안 뜨고 글쓰기로만 뜬다
+var rWalk = gWr.advanceTurn("walk", false);
+assert.strictEqual(rWalk.triggeredEvents.indexOf("unsent_draft"), -1, "산책으로는 안 뜬다");
+var rWrite = gWr.advanceTurn("write", false);
+assert.ok(rWrite.triggeredEvents.indexOf("unsent_draft") !== -1, "글쓰기 중에 뜬다");
+
+// 뜯어보면 w4a(delay 2), 그냥 읽으면 w4b(즉시)
+var deepId = null;
+gWr.getActions().forEach(function (a) {
+  if (a.kind === "event" && a.label.indexOf("뜯어본다") !== -1) deepId = a.id;
+});
+gWr.advanceTurn(deepId, false);
+assert.strictEqual(gWr.getState().dmStory["@rookie_writer"].node, "w2", "delay 2라 예약만");
+gWr.advanceTurn("rest", false);
+gWr.advanceTurn("rest", false);
+assert.strictEqual(gWr.getState().dmStory["@rookie_writer"].node, "w4a", "2일 뒤 도착");
+
+// 끝 노드의 보상: 감각 +3. DM이 스탯을 주는 유일한 경우다(스토리 완주 보상).
+var gRw = writerGame();
+gRw.advanceTurn("rest", false);
+var senseBefore = gRw.getState().stats.감각;
+gRw._goStory("@rookie_writer", "w7");
+assert.strictEqual(gRw.getState().stats.감각, senseBefore + 3, "등단 굿즈로 감각 +3");
+assert.strictEqual(gRw.getState().dmStory["@rookie_writer"].done, true, "끝 노드라 done");
+
+// 30일 지연이 정확히 30일이다 — 지금까지 최장 3일이라 검증되지 않던 범위다
+var gLong = writerGame();
+gLong.advanceTurn("rest", false);
+gLong._goStory("@rookie_writer", "w6a");
+var dayBefore = gLong.getState().day;
+gLong.sendStory("@rookie_writer", 0);
+var pendW = gLong.getState().dmStory["@rookie_writer"].pending;
+assert.ok(pendW, "예약이 잡힌다");
+assert.strictEqual(pendW.day, dayBefore + 30, "예약일이 오늘+30");
+for (var dW = 0; dW < 29; dW++) gLong.advanceTurn("rest", false);
+assert.strictEqual(gLong.getState().dmStory["@rookie_writer"].node, "w6a", "29일째엔 아직");
+gLong.advanceTurn("rest", false);
+assert.strictEqual(gLong.getState().dmStory["@rookie_writer"].node, "w7", "30일째에 도착");
+
+// 두 스토리가 서로 간섭하지 않는다
+var gBoth = Engine.create(loadData());
+var sB = gBoth.getState();
+sB.npcSeen["@rookie_writer"] = 1;
+sB.npcSeen["@old_records"] = 1;
+gBoth.advanceTurn("rest", false);
+sB = gBoth.getState();
+sB.stats.글빨 = 17; sB.stats.감각 = 12;
+// 하루 반응 한도(dailyCap) 때문에 하루엔 못 채운다 — 이틀에 나눠 누른다
+var bw = sB.npcTweets["@rookie_writer"];
+for (var i2 = 0; i2 < 5; i2++) gBoth.toggleReaction(bw[i2].id, "like");
+gBoth.advanceTurn("rest", false);
+var bo = gBoth.getState().npcTweets["@old_records"];
+for (var j2 = 0; j2 < 5; j2++) gBoth.toggleReaction(bo[j2].id, "like");
+gBoth.advanceTurn("rest", false);
+var stB = gBoth.getState().dmStory;
+assert.ok(stB["@rookie_writer"] && stB["@old_records"], "두 스토리가 다 열린다");
+assert.strictEqual(stB["@rookie_writer"].node, "w1");
+assert.strictEqual(stB["@old_records"].node, "s1");
+
+console.log("쓰다가지움 스토리 OK");

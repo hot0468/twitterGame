@@ -65,6 +65,18 @@ GAME_DATA.events = [
           { label: "사진을 찍어둔다", story: "@old_records:s4a", next: "end" },
           { label: "눈으로만 확인한다", story: "@old_records:s4b", next: "end" }
         ] }
+    ] },
+
+  // 쓰다가지움이 보낸 원고를 읽는다. 글쓰기 연습 중에만 뜬다 —
+  // 내 글을 쓰다가 남의 원고를 다시 펼치는 상황이라 그 행동에 붙였다.
+  { id: "unsent_draft",
+    trigger: { action: "write", dmStory: "@rookie_writer:w2" },
+    stages: [
+      { feed: ["내 글을 쓰다가 받은 원고를 다시 열었다.\n첫 문장을 세 번 읽었다"],
+        choices: [
+          { label: "문장을 하나씩 뜯어본다", story: "@rookie_writer:w4a", next: "end" },
+          { label: "끝까지 그냥 읽는다", story: "@rookie_writer:w4b", next: "end" }
+        ] }
     ] }
 ];
 if (typeof module !== "undefined") module.exports = GAME_DATA;

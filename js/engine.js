@@ -640,6 +640,10 @@
       st.node = nodeId;
       st.pending = null;
       pushDm(handle, false, node.text);
+      // 노드 보상. DM은 스탯을 안 건드린다는 규칙의 유일한 예외다 —
+      // 대사를 고르는 게 아니라 긴 이야기를 완주해야 한 번 받는 것이라
+      // 남용 경로가 없다(끝 노드는 done이 찍혀 다시 지나가지 않는다).
+      if (node.reward) applyEffects(node.reward, {});
       if (node.end) st.done = true;
       return st;
     }
