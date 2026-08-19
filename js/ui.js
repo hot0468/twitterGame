@@ -32,6 +32,10 @@
     "논란성": { icon: "flame", tone: "hot" }
   };
 
+  // 트윗 속성 → 스탯. data/npcs.js의 reaction.attrStat과 같은 값이다
+  // (ui.js는 표기만 담당하고 규칙은 엔진에 있다).
+  var ATTR_STAT = { humor: "유머", info: "글빨", daily: "감각", bait: "논란성" };
+
   // 실제 트위터처럼 답글은 홈 타임라인에 안 뜬다 — 알림에서 보거나 트윗 상세로 들어가야 한다
   // 정산은 주 1회뿐이고 이 게임의 심장이라 타임라인·알림 양쪽에 남긴다
   // npc = 팔로잉 계정들의 전용 트윗. 타임라인에만 흐르고 알림엔 안 뜬다(남의 트윗이니까)
@@ -140,6 +144,18 @@
       reactBtn(item.id, "like", "heart", item.likes, r.like) + "</div>";
   }
 
+  // 남의 트윗 우상단 속성 배지. 내 트윗·답글·이벤트엔 붙지 않는다(NPC 트윗만 반응 대상).
+  // 이미 센 트윗(gained)은 반투명 — 정보는 남으면서 아직 얻을 게 있는 트윗이 눈에 띈다.
+  function attrBadge(item) {
+    if (item.kind !== "npc" || !item.attr) return "";
+    var stat = ATTR_STAT[item.attr];
+    if (!stat) return "";
+    var style = STAT_STYLE[stat] || { icon: "trending-up", tone: "ink" };
+    var done = (reactedNow[item.id] || {}).gained ? " done" : "";
+    return '<span class="attr-badge tone-' + style.tone + done + '" title="' + stat + '">' +
+      Icons.svg(style.icon) + "</span>";
+  }
+
   function tweetEl(item, opts) {
     opts = opts || {};
     var div = document.createElement("div");
@@ -160,11 +176,16 @@
     var metrics = item.kind === "me"
       ? metricEl("heart", item.likes) + metricEl("repeat-2", item.rts) + metricEl("chart-column", item.views)
       : "";
+    // 속성 배지: 무엇이 오를지 누르기 전에 보인다.
+    // 날짜는 이름·핸들 옆에 둔다(실제 X 구조). .meta에는 내 트윗의 수치만 남는다.
     div.innerHTML =
       '<div class="avatar"' + avatarAttr(item) + ">" + avatarInner(item) + "</div>" +
-      '<div class="body">' + rtLabel + '<span class="who"></span> <span class="handle"></span>' +
-      '<div class="text"></div><div class="meta"><span>' + shortDate(item.day) + "</span>" + metrics +
-      "</div>" + reactRow(item) + "</div>";
+      '<div class="body">' + rtLabel + attrBadge(item) +
+      '<span class="who"></span> <span class="handle"></span>' +
+      '<span class="stamp">· ' + shortDate(item.day) + "</span>" +
+      '<div class="text"></div>' +
+      (metrics ? '<div class="meta">' + metrics + "</div>" : "") +
+      reactRow(item) + "</div>";
     div.querySelector(".who").textContent = who;
     div.querySelector(".handle").textContent = handle;
     div.querySelector(".text").textContent = item.text;

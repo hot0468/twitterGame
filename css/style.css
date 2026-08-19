@@ -74,12 +74,12 @@ body { background: var(--bg); color: var(--text); font-size: var(--fs-sm);
 /* 스탯 아이콘은 글씨보다 크게 — 1.35em이면 12px 글씨에서 형태가 안 읽힌다 */
 .stat-name .icon { width: 1.4rem; height: 1.4rem; }
 .stat-row b { color: var(--text); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
-.stat-row.tone-ink .icon { color: #1d9bf0; }
-.stat-row.tone-warm .icon { color: #e8a020; }
-.stat-row.tone-violet .icon { color: #8b5cf6; }
-.stat-row.tone-calm .icon { color: #12a594; }
-.stat-row.tone-money .icon { color: #15883f; }
-.stat-row.tone-hot .icon { color: #e5484d; }
+.stat-row.tone-ink .icon, .attr-badge.tone-ink { color: #1d9bf0; }
+.stat-row.tone-warm .icon, .attr-badge.tone-warm { color: #e8a020; }
+.stat-row.tone-violet .icon, .attr-badge.tone-violet { color: #8b5cf6; }
+.stat-row.tone-calm .icon, .attr-badge.tone-calm { color: #12a594; }
+.stat-row.tone-money .icon, .attr-badge.tone-money { color: #15883f; }
+.stat-row.tone-hot .icon, .attr-badge.tone-hot { color: #e5484d; }
 /* 마이너스 통장 — 게임 오버는 아니지만 갚아야 할 빚이라 눈에 띄게 */
 .stat-row.negative b, .stat-row.negative .icon { color: #e5484d; }
 
@@ -148,13 +148,26 @@ body { background: var(--bg); color: var(--text); font-size: var(--fs-sm);
 
 /* ── 트윗 ────────────────────────────────────── */
 .tweet { display: flex; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border); }
-.tweet .body { min-width: 0; flex: 1; }
+.tweet .body { position: relative; min-width: 0; flex: 1; }
 .tweet .who { font-weight: 700; }
 .tweet .handle { color: var(--muted); font-size: var(--fs-xs); }
+/* 이름·핸들 옆 날짜 (실제 X 구조) */
+.tweet .stamp { color: var(--muted); font-size: var(--fs-sm); }
 .tweet .text { margin: 2px 0 5px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
 .tweet .meta { display: flex; align-items: center; gap: 16px;
   color: var(--muted); font-size: var(--fs-xs); }
 .tweet .metric { display: flex; align-items: center; gap: 5px; }
+
+/* 트윗 우상단 속성 배지. 무엇이 오를지 누르기 전에 보여준다. */
+.attr-badge {
+  position: absolute; top: 0; right: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1.5rem; height: 1.5rem;
+  opacity: 0.85;
+}
+.attr-badge .icon { width: 1rem; }
+/* 이미 스탯을 준 트윗은 흐리게 — 아직 얻을 게 있는 트윗이 눈에 띈다 */
+.attr-badge.done { opacity: 0.25; }
 
 /* 남의 트윗의 리트윗·좋아요 버튼. 하루를 소모하지 않는 조작이라 컴포즈와 무관하다 */
 .actions { display: flex; gap: 18px; margin-top: 6px; }
