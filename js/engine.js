@@ -163,6 +163,20 @@
       if (f.kind === "npc" && !f.attr && npcF) f.attr = npcF.reactsTo[0];
     });
 
+    // 옛 세이브의 반응 기록에는 author가 없다 — reactionsOn()이 그걸로 계정을 가린다.
+    // 아직 남아 있는 트윗에서 채운다. 이미 보관함에서 밀려난 것은 되살릴 수 없지만
+    // 그건 이 보정이 없을 때와 같은 수준이라 더 나빠지지 않는다.
+    Object.keys(state.npcTweets).forEach(function (h) {
+      state.npcTweets[h].forEach(function (t) {
+        var r = state.reacted[t.id];
+        if (r && r.gained && !r.author) r.author = h;
+      });
+    });
+    state.feed.forEach(function (f) {
+      var rf = f.id && state.reacted[f.id];
+      if (f.kind === "npc" && rf && rf.gained && !rf.author) rf.author = f.author;
+    });
+
     // 새 계정이어도 첫 화면이 빈 타임라인이면 안 된다. 가입할 때 몇 계정을 팔로우한 셈으로
     // 시작하고(발견일 = 1일차), 그들의 최근 트윗을 첫 타임라인에 깔아준다.
     // 새 게임에서만 — 세이브를 이어받을 때 하면 옛 타임라인 위에 덧칠하게 된다.
@@ -754,6 +768,10 @@
         // 데이터 오타 하나로 그 트윗이 영영 스탯을 못 주는 채로 세이브에 굳어버린다.
         if (stat && underCap) {
           r.gained = true;
+          // 어느 계정 트윗이었는지 함께 남긴다. 보관함은 max를 넘으면 오래된 것부터
+          // 밀려나므로, 나중에 보관함을 훑어 세면 반응 기록이 하루 2개씩 사라진다
+          // (실제로 겪음 — 몰아서 좋아요하면 스토리 시작 조건이 영영 안 열렸다).
+          r.author = t.author;
           state.reactDay.used++;
           var n = (state.reactCount[stat] || 0) + 1, leveled = false;
           if (n >= rules.perPoint) {
@@ -771,12 +789,13 @@
     // 그 계정 트윗 중 내가 반응해서 카운트된 수. 좋아요·리트윗 합산이고 트윗당 1회다
     // (gained가 그 기준이다 — toggleReaction과 같은 기준을 쓴다).
     // state.reacted엔 트윗 id만 있어서 어느 계정 것인지는 보관함을 봐야 안다.
+    // 보관함이 아니라 반응 기록에서 센다. 보관함은 오래된 트윗을 밀어내므로
+    // 거기서 세면 반응 기록이 하루 2개씩 증발한다(실제로 겪음).
     function reactionsOn(handle) {
-      var box = state.npcTweets[handle];
-      if (!box) return 0;
       var n = 0;
-      box.forEach(function (t) {
-        if ((state.reacted[t.id] || {}).gained) n++;
+      Object.keys(state.reacted).forEach(function (id) {
+        var r = state.reacted[id];
+        if (r.gained && r.author === handle) n++;
       });
       return n;
     }

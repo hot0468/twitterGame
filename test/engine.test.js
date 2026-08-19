@@ -1362,3 +1362,49 @@ assert.strictEqual(gFmt.isStoryAccount("@mutuals_only"), false);
 assert.strictEqual(gFmt.isStoryAccount("@없는계정"), false);
 
 console.log("선택지 형식 OK");
+
+// --- 반응 수가 턴을 넘겨도 유지되는가 ---
+// 보관함은 max를 넘으면 오래된 것부터 밀려난다(perDay 2). 반응 수를 보관함에서 세면
+// 반응 기록이 하루 2개씩 증발해서, 몰아서 좋아요한 플레이어는 스토리 조건을 영영 못 채운다.
+// (실제로 겪음 — 감각 조건이 열리는 날엔 이미 카운트가 0이었다)
+var gKeep = Engine.create(loadData());
+gKeep.getState().npcSeen["@old_records"] = 1;
+gKeep.advanceTurn("rest", false);                     // 보관함이 채워진다
+var boxKeep = gKeep.getState().npcTweets["@old_records"];
+for (var iK = 0; iK < 5; iK++) gKeep.toggleReaction(boxKeep[iK].id, "like");
+assert.strictEqual(gKeep._reactionsOn("@old_records"), 5, "반응 직후 5개");
+var firstId = boxKeep[0].id;
+for (var tK = 0; tK < 8; tK++) gKeep.advanceTurn("rest", false);
+assert.ok(!gKeep.getState().npcTweets["@old_records"].some(function (t) { return t.id === firstId; }),
+  "8턴이면 첫 트윗은 보관함에서 밀려난다 (이 테스트의 전제)");
+assert.strictEqual(gKeep._reactionsOn("@old_records"), 5,
+  "밀려나도 반응 수는 유지된다 (reacted에서 세므로)");
+
+// 계정별로 따로 센다
+var otherBox = null, otherHandle = null;
+var stK = gKeep.getState();
+Object.keys(stK.npcTweets).forEach(function (h) {
+  if (h !== "@old_records" && !otherHandle && stK.npcTweets[h].length) {
+    otherHandle = h; otherBox = stK.npcTweets[h];
+  }
+});
+if (otherHandle) {
+  gKeep.toggleReaction(otherBox[0].id, "like");
+  assert.strictEqual(gKeep._reactionsOn("@old_records"), 5, "남의 계정 반응은 안 섞인다");
+  assert.ok(gKeep._reactionsOn(otherHandle) >= 1, "그 계정 쪽이 늘어난다");
+}
+
+// 옛 세이브: reacted에 author가 없어도 보관함에 남은 것은 채워진다.
+// 아직 안 밀려난 시점에 재야 한다 — 밀려난 트윗은 되살릴 근거가 없다(그건 보정 전과 같은 수준).
+var gMig = Engine.create(loadData());
+gMig.getState().npcSeen["@old_records"] = 1;
+gMig.advanceTurn("rest", false);
+var boxMig = gMig.getState().npcTweets["@old_records"];
+for (var iM = 0; iM < 3; iM++) gMig.toggleReaction(boxMig[iM].id, "like");
+var savedNoAuthor = JSON.parse(JSON.stringify(gMig.getState()));
+Object.keys(savedNoAuthor.reacted).forEach(function (id) { delete savedNoAuthor.reacted[id].author; });
+var gAuthor = Engine.create(loadData(), savedNoAuthor);
+assert.strictEqual(gAuthor._reactionsOn("@old_records"), 3,
+  "옛 세이브도 보관함에 남은 반응은 되살린다");
+
+console.log("반응 수 유지 OK");
