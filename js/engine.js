@@ -638,11 +638,25 @@
       return { id: tweetId, kind: kind, on: r[kind], gain: gain };
     }
 
+    // 그 계정 트윗 중 내가 반응해서 카운트된 수. 좋아요·리트윗 합산이고 트윗당 1회다
+    // (gained가 그 기준이다 — toggleReaction과 같은 기준을 쓴다).
+    // state.reacted엔 트윗 id만 있어서 어느 계정 것인지는 보관함을 봐야 안다.
+    function reactionsOn(handle) {
+      var box = state.npcTweets[handle];
+      if (!box) return 0;
+      var n = 0;
+      box.forEach(function (t) {
+        if ((state.reacted[t.id] || {}).gained) n++;
+      });
+      return n;
+    }
+
     return { getState: function () { return state; }, getActions: getActions,
       previewAction: previewAction, advanceTurn: advanceTurn,
       toggleReaction: toggleReaction, toggleFollow: toggleFollow,
       dmAccounts: dmAccounts, getDmChoices: getDmChoices, sendDm: sendDm,
-      markDmRead: markDmRead, unreadDms: unreadDms };
+      markDmRead: markDmRead, unreadDms: unreadDms,
+      _reactionsOn: reactionsOn };
   }
 
   return { _utils: { compare: compare, checkCond: checkCond, evalFormula: evalFormula,

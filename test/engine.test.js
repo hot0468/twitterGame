@@ -1124,3 +1124,32 @@ assert.strictEqual(pv.effects.멘탈, 8);
 assert.ok(pv.tweetEffects, "트윗 효과가 있다");
 
 console.log("산책하기 OK");
+
+// --- 계정별 반응 수 ---
+// 트윗이 전부 있는 계정 하나만 두고 센다
+function countData() {
+  var d = loadData();
+  d.npcs = [{ handle: "@t_count", name: "카운트", bio: "b", followers: 100,
+    reactsTo: ["info"], replies: ["r"],
+    tweets: ["가 첫번째 트윗입니다", "가 두번째 트윗입니다", "가 세번째 트윗입니다",
+             "가 네번째 트윗입니다", "가 다섯번째 트윗입니다", "가 여섯번째 트윗입니다"] }];
+  d.timeline = Object.assign({}, d.timeline,
+    { startFollowing: 1, gen: Object.assign({}, d.timeline.gen, { seed: 6, max: 6 }) });
+  return d;
+}
+var gCount = Engine.create(countData());
+var boxCount = gCount.getState().npcTweets["@t_count"];
+assert.strictEqual(gCount._reactionsOn("@t_count"), 0, "처음엔 0");
+gCount.toggleReaction(boxCount[0].id, "like");
+gCount.toggleReaction(boxCount[1].id, "rt");
+assert.strictEqual(gCount._reactionsOn("@t_count"), 2, "좋아요와 리트윗을 합산");
+// 같은 트윗을 또 눌러도 한 번만 센다
+gCount.toggleReaction(boxCount[0].id, "rt");
+assert.strictEqual(gCount._reactionsOn("@t_count"), 2, "트윗당 1회");
+// 취소해도 줄지 않는다 (gained가 남는다)
+gCount.toggleReaction(boxCount[0].id, "like");
+assert.strictEqual(gCount._reactionsOn("@t_count"), 2, "취소해도 유지");
+// 모르는 핸들은 0
+assert.strictEqual(gCount._reactionsOn("@없는계정"), 0);
+
+console.log("계정별 반응 수 OK");
