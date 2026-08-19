@@ -1500,3 +1500,37 @@ assert.strictEqual(stB["@rookie_writer"].node, "w1");
 assert.strictEqual(stB["@old_records"].node, "s1");
 
 console.log("쓰다가지움 스토리 OK");
+
+// --- 괴담계 결말 보상 ---
+// 결말이 둘이라 값도 다르다: 닫히는 끝은 대가 없이 감각 +2,
+// 열린 채 남는 끝은 감각 +3에 멘탈 -5 — 더 얻고 대가를 낸다(핵심 교환과 같은 구조).
+var gEndA = storyGame();
+gEndA.advanceTurn("rest", false);
+var ea0 = Object.assign({}, gEndA.getState().stats);
+gEndA._goStory("@old_records", "s7a");
+var ea1 = gEndA.getState().stats;
+assert.strictEqual(ea1.감각, ea0.감각 + 2, "닫히는 끝은 감각 +2");
+assert.strictEqual(ea1.멘탈, ea0.멘탈, "닫히는 끝은 대가가 없다");
+
+var gEndB = storyGame();
+gEndB.advanceTurn("rest", false);
+var eb0 = Object.assign({}, gEndB.getState().stats);
+gEndB._goStory("@old_records", "s7b");
+var eb1 = gEndB.getState().stats;
+assert.strictEqual(eb1.감각, eb0.감각 + 3, "열린 끝은 감각 +3");
+assert.strictEqual(eb1.멘탈, eb0.멘탈 - 5, "열린 끝은 멘탈 -5");
+
+// 멘탈이 모자랄 때도 0이 바닥이다 — reward도 clampStat을 지나야 한다
+var gEndLow = storyGame();
+gEndLow.advanceTurn("rest", false);
+gEndLow.getState().stats.멘탈 = 3;
+gEndLow._goStory("@old_records", "s7b");
+assert.strictEqual(gEndLow.getState().stats.멘탈, 0, "멘탈 3에서 -5면 0에서 멈춘다");
+
+// 보상은 한 번만 — 끝 노드는 done이라 다시 지나가지 않는다
+var senseAfter = gEndB.getState().stats.감각;
+assert.strictEqual(gEndB.sendStory("@old_records", 0), null, "끝난 뒤엔 sendStory가 막힌다");
+for (var tE = 0; tE < 10; tE++) gEndB.advanceTurn("rest", false);
+assert.strictEqual(gEndB.getState().stats.감각, senseAfter, "턴을 돌려도 보상이 다시 안 들어온다");
+
+console.log("괴담계 결말 보상 OK");
