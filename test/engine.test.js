@@ -1153,3 +1153,87 @@ assert.strictEqual(gCount._reactionsOn("@t_count"), 2, "취소해도 유지");
 assert.strictEqual(gCount._reactionsOn("@없는계정"), 0);
 
 console.log("계정별 반응 수 OK");
+
+// --- 괴담계 스토리 DM ---
+// 조건을 갖춘 상태를 만든다: @old_records를 만나고, 트윗 5개에 반응하고, 감각 12 / 글빨 5
+function storyGame(overrides) {
+  var d = loadData();
+  var g = Engine.create(d);
+  var s = g.getState();
+  // 계정을 만난 것으로 하고 보관함을 채운다
+  s.npcSeen["@old_records"] = 1;
+  g.advanceTurn("rest", false);   // 보관함이 채워진다
+  s = g.getState();
+  Object.assign(s.stats, { 감각: 12, 글빨: 5 }, (overrides && overrides.stats) || {});
+  var box = s.npcTweets["@old_records"] || [];
+  var n = overrides && overrides.reactions != null ? overrides.reactions : 5;
+  for (var i = 0; i < n && i < box.length; i++) g.toggleReaction(box[i].id, "like");
+  return g;
+}
+
+// 조건을 다 갖추면 그 턴에 확정으로 첫 DM이 온다
+var gS = storyGame();
+assert.ok(!gS.getState().dmStory["@old_records"], "아직 시작 전");
+gS.advanceTurn("rest", false);
+var st = gS.getState().dmStory["@old_records"];
+assert.ok(st, "조건 충족 턴에 스토리가 시작된다");
+assert.strictEqual(st.node, "s1");
+var msgs = gS.getState().dms["@old_records"].msgs;
+assert.strictEqual(msgs.length, 1, "첫 인사 한 통");
+assert.strictEqual(msgs[0].me, false, "상대가 보낸 것");
+
+// 반응이 모자라면 시작 안 함
+var gLow = storyGame({ reactions: 4 });
+gLow.advanceTurn("rest", false);
+assert.ok(!gLow.getState().dmStory["@old_records"], "반응 4개로는 시작 안 함");
+
+// 감각이 낮으면 시작 안 함
+var gDull = storyGame({ stats: { 감각: 11 } });
+gDull.advanceTurn("rest", false);
+assert.ok(!gDull.getState().dmStory["@old_records"], "감각 11로는 시작 안 함");
+
+// 글빨이 높으면 시작 안 함
+var gSharp = storyGame({ stats: { 글빨: 20 } });
+gSharp.advanceTurn("rest", false);
+assert.ok(!gSharp.getState().dmStory["@old_records"], "글빨 20이면 시작 안 함");
+
+// 선택지를 고르면 다음 노드로 간다
+var ch = gS.storyChoices("@old_records");
+assert.strictEqual(ch.length, 2, "s1의 선택지 2개");
+gS.sendStory("@old_records", 0);
+assert.strictEqual(gS.getState().dmStory["@old_records"].node, "s2");
+assert.strictEqual(gS.getState().day, gS.getState().day, "스토리 선택은 하루를 안 쓴다");
+
+// s2는 대기 — 선택지가 없다
+assert.deepStrictEqual(gS.storyChoices("@old_records"), [], "s2는 대기라 선택지 없음");
+
+// 대기 중에는 확률 DM도 안 온다(스토리 계정은 후보에서 빠진다)
+var beforeCount = gS.getState().dms["@old_records"].msgs.length;
+for (var w = 0; w < 20; w++) gS.advanceTurn("rest", false);
+assert.strictEqual(gS.getState().dms["@old_records"].msgs.length, beforeCount,
+  "스토리 진행 중엔 잡담 DM이 안 온다");
+
+// 지연 답장: goStory로 s6에 가면 3일 뒤에 도착한다
+var gD = storyGame();
+gD.advanceTurn("rest", false);
+gD._goStory("@old_records", "s5");
+var lenBefore = gD.getState().dms["@old_records"].msgs.length;
+gD.sendStory("@old_records", 0);          // s5 → s6 (delay 3)
+assert.strictEqual(gD.getState().dmStory["@old_records"].node, "s5",
+  "지연 중엔 노드가 아직 안 옮겨진다");
+assert.ok(gD.getState().dmStory["@old_records"].pending, "pending이 잡힌다");
+gD.advanceTurn("rest", false);
+gD.advanceTurn("rest", false);
+assert.strictEqual(gD.getState().dmStory["@old_records"].node, "s5", "2일째엔 아직");
+gD.advanceTurn("rest", false);
+assert.strictEqual(gD.getState().dmStory["@old_records"].node, "s6", "3일째에 도착");
+assert.ok(gD.getState().dms["@old_records"].msgs.length > lenBefore, "답장이 쌓였다");
+
+// 끝에 도달하면 done이 되고 다시 시작 안 함
+var gE = storyGame();
+gE.advanceTurn("rest", false);
+gE._goStory("@old_records", "s7a");
+assert.strictEqual(gE.getState().dmStory["@old_records"].done, true, "끝 노드면 done");
+assert.deepStrictEqual(gE.storyChoices("@old_records"), [], "끝나면 선택지 없음");
+
+console.log("괴담계 스토리 DM OK");

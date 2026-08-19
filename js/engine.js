@@ -80,6 +80,9 @@
       // dms: 계정별 대화방 { "@h": { msgs: [{me,text,day}], used: [주제idx], opened: [인사idx], seen: n } }.
       // feed와 별개다 — 실제 X도 DM은 알림이 아니라 자기 뱃지를 쓴다.
       npcTweets: {}, npcSeen: {}, reacted: {}, following: {}, dms: {},
+      // 스토리 DM 진행 상태. { "@h": { node, pending: {to, day}|null, done } }
+      // 기존 dms(대화 내용)와 별개다 — 저쪽은 말풍선, 이쪽은 어디까지 왔는가다.
+      dmStory: {},
       // 속성별 반응 카운터. perPoint(5)가 차면 그 스탯 +1하고 0으로 돌아간다.
       // 스탯을 정수로 유지하려고 소수 대신 카운터를 쓴다.
       reactCount: { 글빨: 0, 유머: 0, 감각: 0, 논란성: 0 },
@@ -459,7 +462,10 @@
       // 디엠 도착. 이미 만난 DM 계정 중 인사말이 남은 곳에서 하루 한 통까지.
       // 팔로우와 무관하다 — 안 팔로우해도 DM은 온다(실제 X와 동일).
       if (data.dm && rand() < (data.dm.chance || 0)) {
-        var callers = dmAccounts().filter(function (h) { return unusedOpens(h).length; });
+        // 스토리가 도는 계정은 뺀다 — 이야기 중간에 잡담이 끼면 안 된다
+        var callers = dmAccounts().filter(function (h) {
+          return unusedOpens(h).length && !inStory(h);
+        });
         if (callers.length) {
           var who = pick(callers), oi = pick(unusedOpens(who));
           state.dms[who].opened.push(oi);
@@ -488,6 +494,11 @@
       }
       state.day += lived;
 
+      // 스토리 DM: 조건이 맞으면 시작하고, 예약된 지연 답장이 오늘이면 도착한다.
+      // npcSeen 기록 뒤(위)이자 날짜가 넘어간 뒤에 와야 한다 — pending.day는 "그날이 되면"
+      // 도착하는 예약이라, 날짜 증가 전에 검사하면 하루 늦게 도착한다.
+      tickStories();
+
       // 생활비는 행동과 무관한 고정 지출이라 statChanges에 넣지 않는다.
       // (statChanges는 "이 행동이 바꾼 것"이고 미리보기와 1:1로 맞아야 한다)
       state.stats.돈 -= data.economy.livingCost * lived;
@@ -512,8 +523,12 @@
     // 트윗에 다 누를 수 있어서, 팔로워를 주면 공짜 성장 경로가 된다).
     // ── 디엠 ────────────────────────────────────────────
     // 방은 처음 쓸 때 만든다. data.dm에 없는 계정은 DM 자체가 없다.
+    // accounts(선택지 풀) 계정과 stories(스토리) 계정 둘 다 방을 갖는다.
     function dmRoom(handle) {
-      if (!data.dm || !data.dm.accounts[handle]) return null;
+      if (!data.dm) return null;
+      var known = data.dm.accounts[handle] ||
+        (data.dm.stories && data.dm.stories[handle]);
+      if (!known) return null;
       return state.dms[handle] ||
         (state.dms[handle] = { msgs: [], used: [], opened: [], seen: 0 });
     }
@@ -569,6 +584,84 @@
       return Object.keys(state.dms).reduce(function (n, h) {
         return n + Math.max(0, state.dms[h].msgs.length - state.dms[h].seen);
       }, 0);
+    }
+
+    // ── 스토리 DM ────────────────────────────────────────────
+    // 기존 DM(선택지 풀)과 다른 갈래다. 순서가 있고, 한 번 지나간 노드로 돌아가지 않는다.
+    function storyDef(handle) {
+      return (data.dm && data.dm.stories && data.dm.stories[handle]) || null;
+    }
+    function storyState(handle) { return state.dmStory[handle] || null; }
+
+    // 그 노드로 옮기고 상대의 말을 방에 넣는다. 끝 노드면 done을 찍는다.
+    function goStory(handle, nodeId) {
+      var def = storyDef(handle);
+      if (!def || !def.nodes[nodeId]) return null;
+      var node = def.nodes[nodeId];
+      var st = state.dmStory[handle] ||
+        (state.dmStory[handle] = { node: null, pending: null, done: false });
+      dmRoom(handle);
+      st.node = nodeId;
+      st.pending = null;
+      pushDm(handle, false, node.text);
+      if (node.end) st.done = true;
+      return st;
+    }
+
+    // 내가 고를 수 있는 말. 대기(choices 없음)·끝·지연 중이면 빈 배열이다.
+    function storyChoices(handle) {
+      var def = storyDef(handle), st = storyState(handle);
+      if (!def || !st || st.done || st.pending) return [];
+      var node = def.nodes[st.node];
+      if (!node || !node.choices) return [];
+      return node.choices.map(function (c, i) { return { idx: i, say: c.say }; });
+    }
+
+    // 스토리 선택. 하루를 안 쓰고 스탯도 안 건드린다(기존 DM과 같은 규칙).
+    // 다음 노드에 delay가 있으면 그 날짜로 예약만 하고 답장은 나중에 온다.
+    function sendStory(handle, idx) {
+      var def = storyDef(handle), st = storyState(handle);
+      if (!def || !st || st.done || st.pending) return null;
+      var node = def.nodes[st.node];
+      if (!node || !node.choices) return null;
+      var choice = node.choices[idx];
+      if (!choice) return null;
+      var room = dmRoom(handle);
+      pushDm(handle, true, choice.say);
+      var next = def.nodes[choice.to];
+      if (next && next.delay > 0) st.pending = { to: choice.to, day: state.day + next.delay };
+      else goStory(handle, choice.to);
+      room.seen = room.msgs.length; // 보고 있는 방이라 바로 읽음
+      return { handle: handle, msgs: room.msgs };
+    }
+
+    // 시작 조건. reactions는 그 계정 트윗에 반응한 수, 나머지는 스탯 비교식이다.
+    function storyReady(handle) {
+      var def = storyDef(handle);
+      if (!def || state.dmStory[handle]) return false;      // 이미 시작했으면 안 한다
+      if (state.npcSeen[handle] == null) return false;      // 만나야 온다
+      var req = def.requires || {};
+      if (req.reactions != null && reactionsOn(handle) < req.reactions) return false;
+      var rest = {};
+      Object.keys(req).forEach(function (k) { if (k !== "reactions") rest[k] = req[k]; });
+      return checkCond(rest, state);
+    }
+
+    // 턴마다: 조건이 맞으면 시작하고, 예약된 지연 답장이 오늘이면 도착시킨다.
+    function tickStories() {
+      if (!data.dm || !data.dm.stories) return;
+      Object.keys(data.dm.stories).forEach(function (h) {
+        if (storyReady(h)) { goStory(h, data.dm.stories[h].start); return; }
+        var st = state.dmStory[h];
+        if (st && st.pending && state.day >= st.pending.day) goStory(h, st.pending.to);
+      });
+    }
+
+    // 스토리가 진행 중(아직 안 끝난)인 계정. 확률 DM 후보에서 빼는 근거다 —
+    // 이야기 중간에 잡담이 끼면 안 된다.
+    function inStory(handle) {
+      var st = state.dmStory[handle];
+      return !!(st && !st.done);
     }
 
     // 팔로우 토글. 반응과 같은 부류다 — 하루를 안 쓰고 스탯도 안 건드린다.
@@ -656,6 +749,8 @@
       toggleReaction: toggleReaction, toggleFollow: toggleFollow,
       dmAccounts: dmAccounts, getDmChoices: getDmChoices, sendDm: sendDm,
       markDmRead: markDmRead, unreadDms: unreadDms,
+      storyChoices: storyChoices, sendStory: sendStory,
+      _goStory: goStory,
       _reactionsOn: reactionsOn };
   }
 
