@@ -874,3 +874,19 @@ assert.strictEqual(gOldD.unreadDms(), 0);
 console.log("디엠 OK (" + dmHandles.length + "계정, 인사말 " + maxOpens + "개)");
 
 console.log("Task 6 OK");
+
+// --- 트윗 속성: 데이터 노브 ---
+var rx = loadData().reaction;
+assert.ok(rx, "GAME_DATA.reaction이 있어야 한다");
+assert.strictEqual(rx.perPoint, 5, "5개마다 스탯 +1");
+assert.strictEqual(rx.attrStat.humor, "유머");
+assert.strictEqual(rx.attrStat.info, "글빨");
+assert.strictEqual(rx.attrStat.daily, "감각");
+assert.strictEqual(rx.attrStat.bait, "논란성");
+// 모든 계정의 첫 카테고리가 매핑에 있어야 한다 — 없으면 그 계정 트윗은 스탯을 못 준다
+loadData().npcs.forEach(function (n) {
+  assert.ok(rx.attrStat[n.reactsTo[0]],
+    n.handle + "의 첫 카테고리 " + n.reactsTo[0] + "가 attrStat에 없다");
+});
+
+console.log("트윗 속성 OK");
