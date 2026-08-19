@@ -79,6 +79,10 @@
       // 속성별 반응 카운터. perPoint(5)가 차면 그 스탯 +1하고 0으로 돌아간다.
       // 스탯을 정수로 유지하려고 소수 대신 카운터를 쓴다.
       reactCount: { 글빨: 0, 유머: 0, 감각: 0, 논란성: 0 },
+      // 오늘 카운터가 오른 반응 수 { day, used }. dailyCap을 넘으면 반응은 여전히 되지만
+      // 카운터는 안 오른다(gained도 안 찍는다) — 검색 화면이 보관함 전체를 모아주므로
+      // 하루 상한이 없으면 무제한 그라인딩으로 밸런스가 무너진다.
+      reactDay: { day: 1, used: 0 },
       feed: [], tweetLog: [], activeEvents: [], eventHistory: [], ending: null
     };
   }
@@ -599,15 +603,24 @@
       // 취소하면 지운다: 다시 리트윗하면 그날로 새로 올라와야 한다.
       if (kind === "rt") { if (r.rt) r.rtDay = state.day; else delete r.rtDay; }
 
+      // 날짜가 바뀌었으면 하루 반응 한도를 리셋한다. day가 다르면 새 날로 본다 —
+      // 멘탈 붕괴로 날짜가 건너뛰어도(lived=2) 그냥 "어제와 다른 날"이라 정상 리셋된다.
+      if (state.reactDay.day !== state.day) state.reactDay = { day: state.day, used: 0 };
+
       var gain = null;
       // 켤 때만, 그리고 이 트윗을 아직 안 셌을 때만 카운터가 오른다.
       if (r[kind] && !r.gained) {
         var rules = data.reaction, stat = rules && rules.attrStat[t.attr];
+        var cap = rules && rules.dailyCap;
+        // 하루 한도를 넘으면 반응(좋아요/리트윗) 자체는 정상 동작하지만 카운터는 안 오른다.
+        // gained도 안 찍는다 — 안 찍어야 오늘 넘치게 누른 트윗을 내일 다시 눌러 셀 수 있다.
+        var underCap = cap == null || state.reactDay.used < cap;
         // stat을 실제로 셀 수 있을 때만 gained를 찍는다. attrStat에 없는 속성(오타·누락)이면
         // 찍지 않아야 매핑을 고친 뒤 같은 트윗에 다시 반응해서 셀 수 있다 — 안 그러면
         // 데이터 오타 하나로 그 트윗이 영영 스탯을 못 주는 채로 세이브에 굳어버린다.
-        if (stat) {
+        if (stat && underCap) {
           r.gained = true;
+          state.reactDay.used++;
           var n = (state.reactCount[stat] || 0) + 1, leveled = false;
           if (n >= rules.perPoint) {
             n = 0;

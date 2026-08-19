@@ -1031,3 +1031,74 @@ assert.strictEqual(rFixed.gain.stat, "유머", "매핑을 고치면 같은 트�
 assert.strictEqual(rFixed.gain.count, 1);
 
 console.log("반응 카운터와 스탯 상승 OK");
+
+// --- 하루 반응 한도 (dailyCap) ---
+// 검색 화면이 모든 계정의 보관함을 한 화면에 모아주므로, 트윗당 1회 상한만으로는
+// 하루에 수백 개를 몰아 눌러 스탯을 폭증시킬 수 있었다(Critical 2). 카운터가 오르는
+// 반응 자체를 하루 dailyCap개로 제한한다 — 반응(좋아요/리트윗 토글)은 한도와 무관하게
+// 항상 정상 동작해야 하고, 한도 초과分은 gained를 찍지 않아 다음 날 다시 셀 수 있어야 한다.
+function capData(cap) {
+  var d = loadData();
+  var tweets = [];
+  for (var i = 0; i < 24; i++) tweets.push("한도 테스트 트윗 " + i + "번입니다");
+  d.npcs = [{ handle: "@t_cap", name: "테스트", bio: "b", followers: 100,
+    reactsTo: ["humor"], replies: ["r"], tweets: tweets }];
+  // max(20)가 트윗 수(24)보다 작아야 advanceTurn 이후에도 addTweets가 새 트윗을 낼 여유가 있다
+  // (check-assets.js가 실제 데이터에 강제하는 것과 같은 관계).
+  d.timeline = Object.assign({}, d.timeline,
+    { startFollowing: 1, gen: Object.assign({}, d.timeline.gen, { seed: 20, max: 20 }) });
+  d.reaction = Object.assign({}, d.reaction, { dailyCap: cap });
+  return d;
+}
+
+// 한도(3)까지는 카운터가 오른다
+var dCap = capData(3);
+var gCap = Engine.create(dCap);
+var boxCap = gCap.getState().npcTweets["@t_cap"];
+for (var iCap = 0; iCap < 3; iCap++) {
+  var rCap = gCap.toggleReaction(boxCap[iCap].id, "like");
+  assert.strictEqual(rCap.gain.stat, "유머", "한도 안에서는 카운터가 오른다 (idx " + iCap + ")");
+  assert.strictEqual(rCap.gain.count, iCap + 1);
+}
+assert.strictEqual(gCap.getState().reactCount.유머, 3, "한도(3)까지 정확히 3 누적");
+
+// 한도를 넘으면: 반응(좋아요) 자체는 켜지지만 카운터는 안 오르고 gain은 null
+var rOver = gCap.toggleReaction(boxCap[3].id, "like");
+assert.strictEqual(rOver.gain, null, "한도 초과 시 gain은 null");
+assert.strictEqual(rOver.on, true, "한도를 넘어도 반응 자체는 정상 동작(켜짐)");
+assert.strictEqual(gCap.getState().reacted[boxCap[3].id].like, true, "좋아요 상태가 실제로 저장된다");
+assert.strictEqual(gCap.getState().reactCount.유머, 3, "한도 초과분은 카운터에 안 잡힌다");
+
+// 한도 초과 트윗은 gained를 안 찍는다 — 다음 날 다시 누르면 카운터가 올라야 한다
+assert.strictEqual(gCap.getState().reacted[boxCap[3].id].gained, undefined,
+  "한도 초과 트윗은 gained가 안 찍혀야 다음 날 다시 셀 수 있다");
+
+// 리트윗도 같은 한도를 공유한다(따로 3개를 더 허용하면 안 된다)
+var rOverRt = gCap.toggleReaction(boxCap[4].id, "rt");
+assert.strictEqual(rOverRt.gain, null, "리트윗도 같은 하루 한도를 공유한다");
+assert.strictEqual(rOverRt.on, true, "한도를 넘어도 리트윗 자체는 정상 동작");
+
+// 취소도 여전히 자유롭다(한도와 무관)
+var rToggleOff = gCap.toggleReaction(boxCap[3].id, "like");
+assert.strictEqual(rToggleOff.on, false, "한도 초과 트윗도 취소는 된다");
+var rToggleOn = gCap.toggleReaction(boxCap[3].id, "like");
+assert.strictEqual(rToggleOn.on, true, "다시 켤 수도 있다");
+assert.strictEqual(rToggleOn.gain, null, "여전히 오늘 한도 안에서는 gain이 없다");
+
+// 날짜가 바뀌면 한도(reactDay.used)가 리셋된다 — advanceTurn으로 하루를 넘긴다.
+// reactCount(perPoint 누적기)는 한도와 별개라 날짜가 바뀌어도 그대로 이어진다 —
+// 어제 3개를 세었으므로 오늘 첫 반응은 4번째다.
+gCap.advanceTurn("rest", false);
+assert.strictEqual(gCap.getState().day, 2, "하루가 넘어갔다");
+var rNextDay = gCap.toggleReaction(boxCap[3].id, "like"); // 어제 한도 초과로 gained가 안 찍힌 트윗
+assert.strictEqual(rNextDay.gain.stat, "유머", "날짜가 바뀌면 한도가 리셋돼 다시 셀 수 있다");
+assert.strictEqual(rNextDay.gain.count, 4, "reactCount는 한도와 별개라 어제(3)에 이어 4");
+assert.strictEqual(gCap.getState().reactDay.used, 1, "reactDay.used는 새 날 1부터");
+
+// dailyCap이 없는 옛 세이브도 안전하게 동작한다(missing 맵이 최상위 필드를 채운다)
+var savedNoReactDay = JSON.parse(JSON.stringify(reactGame().getState()));
+delete savedNoReactDay.reactDay;
+var gOldCap = Engine.create(reactData("@t_react", "humor", "가"), savedNoReactDay);
+assert.ok(gOldCap.getState().reactDay, "reactDay가 채워져야 한다");
+
+console.log("하루 반응 한도 OK");
