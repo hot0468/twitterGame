@@ -23,8 +23,12 @@ function mulberry32(seed) { // 시드 고정 RNG — 재현 가능한 시뮬레�
 
 // 전략은 { id, tweet }을 고른다 — 행동을 뭘 할지 + 그걸 트윗할지
 var strategies = {
+  // 아무 행동이나 고르는 플레이어. 다만 **고른 건 올린다** —
+  // 트윗을 안 하면 팔로워가 아예 안 늘어서(핵심 루프의 교환 조건), 동전 던지기로 두면
+  // 절반의 턴이 성장에 기여하지 않는다. 행동을 하나 추가할 때마다 이 전략만
+  // 500턴 한계에 걸리던 원인이 그것이다(실측: 멘탈은 최저 50이라 붕괴가 원인이 아니었다).
   "랜덤": function (acts, rand) {
-    return { id: acts[Math.floor(rand() * acts.length)].id, tweet: rand() < 0.5 };
+    return { id: acts[Math.floor(rand() * acts.length)].id, tweet: true };
   },
   "성장몰빵": function (acts, rand, state) {
     var ev = acts.filter(function (a) { return a.kind === "event"; })[0];
