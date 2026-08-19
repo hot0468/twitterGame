@@ -133,14 +133,34 @@ body { background: var(--bg); color: var(--text); font-size: var(--fs-sm);
 .avatar[data-account]:hover { opacity: 0.82; }
 .avatar .icon { width: 1.7rem; height: 1.7rem; }
 
-.action-list { max-height: 52vh; overflow-y: auto; }
-.action-item { padding: 10px 14px; cursor: pointer; display: flex;
-  justify-content: space-between; align-items: center; gap: 12px; }
-.action-item:hover { background: var(--hover); }
-.action-item .kind { display: flex; align-items: center; gap: 5px;
-  color: var(--muted); font-size: var(--fs-xs); flex-shrink: 0; }
-.action-item.event { color: var(--accent); font-weight: 700; }
-.action-item.event .kind { color: var(--accent); }
+/* 행동 선택 카드. 한 줄 목록이었을 땐 효과가 한 덩어리 문자열이라 안 읽혔다 —
+   카드마다 아이콘 + 이름 + 효과 칩으로 쪼개서 훑어보고 고를 수 있게 한다. */
+.action-list { max-height: 52vh; overflow-y: auto; padding: 10px 12px;
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.action-card { display: flex; align-items: flex-start; gap: 9px; width: 100%;
+  padding: 11px 12px; border: 1px solid var(--line); border-radius: 14px;
+  background: var(--bg); cursor: pointer; text-align: left; font: inherit;
+  color: inherit; transition: background .12s, border-color .12s; }
+.action-card:hover { background: var(--hover); border-color: var(--accent); }
+.action-card .a-icon { display: flex; color: var(--muted); flex-shrink: 0; padding-top: 1px; }
+.action-card .a-icon .icon { width: 1.25rem; }
+.action-card:hover .a-icon { color: var(--accent); }
+.action-card .a-body { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.action-card .a-label { font-size: var(--fs-base); font-weight: 700; }
+.action-card .a-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+
+/* 효과 칩. 스탯 색(tone)을 그대로 물려받아 무엇이 오르는지 색으로도 읽힌다 */
+.action-card .chip { display: inline-flex; align-items: center; gap: 3px;
+  font-size: var(--fs-xs); color: var(--muted); }
+.action-card .chip .icon { width: 0.95rem; }
+.action-card .chip.down { opacity: 0.75; }
+.action-card .chip.none { color: var(--muted); opacity: 0.6; }
+.action-card .chip.event-chip { color: var(--accent); font-weight: 700; }
+
+/* 이벤트 대응은 오늘 해야 하는 일이라 눈에 띄어야 한다 — 두 칸을 다 쓴다 */
+.action-card.event { grid-column: 1 / -1; border-color: var(--accent); }
+.action-card.event .a-icon { color: var(--accent); }
+.action-card.event .a-label { color: var(--accent); }
 
 /* 홈 타임라인의 추천/팔로우 중 탭. 상단바 바로 아래 붙어 스크롤해도 남는다 */
 .home-tabs { position: sticky; top: 2.9rem; z-index: 4;
@@ -482,7 +502,8 @@ body { background: var(--bg); color: var(--text); font-size: var(--fs-sm);
   /* 팝업은 화면 폭을 거의 다 쓴다 (데스크톱의 max-width 상한을 푼다) */
   .overlay { padding: 14px; align-items: flex-end; }
   .overlay .card { max-width: none; }
-  .action-list { max-height: 60vh; }
+  /* 좁은 화면에선 2열이면 이름이 뭉개진다 — 한 줄에 하나씩 */
+  .action-list { max-height: 60vh; grid-template-columns: 1fr; }
 
   /* 스탯 → 독바의 스탯 버튼을 누르면 뜨는 팝오버 (독바 위에 카드로) */
   .stats-panel { display: none; }

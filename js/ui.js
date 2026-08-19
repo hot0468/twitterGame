@@ -885,19 +885,62 @@
     }).join("  ");
   }
 
+  // 행동 카드의 아이콘. 그 행동이 올리는 스탯과 같은 아이콘을 쓴다 —
+  // 스탯 패널과 맞춰두면 무엇이 오르는지가 아이콘만으로 읽힌다(속성 배지와 같은 원리).
+  var ACTION_ICON = {
+    daily: "calendar", write: "feather", meme: "laugh", trend: "trending-up",
+    archive: "book-open", beef_watch: "flame", rest: "battery-medium",
+    walk: "footprints", parttime: "wallet", sponsor: "wallet", promo: "user-plus"
+  };
+
+  // 효과를 칩 하나씩으로 쪼갠다. 한 줄 문자열로 뭉치면 뭐가 오르고 뭐가 내리는지 안 읽힌다.
+  function effectChips(effects) {
+    return Object.keys(effects || {}).map(function (k) {
+      var v = effects[k];
+      var style = STAT_STYLE[k] || { icon: "trending-up", tone: "ink" };
+      var sign = v >= 0 ? "+" : "-";
+      var chip = document.createElement("span");
+      chip.className = "chip tone-" + style.tone + (v < 0 ? " down" : "");
+      chip.innerHTML = Icons.svg(style.icon) + "<b></b>";
+      chip.querySelector("b").textContent = sign + statValue(k, Math.abs(v));
+      chip.title = k;
+      return chip;
+    });
+  }
+
   function showActions(actions, onPick) {
     var list = $("action-list");
     list.innerHTML = "";
     actions.forEach(function (a) {
-      var item = document.createElement("div");
-      item.className = "action-item" + (a.kind === "event" ? " event" : "");
-      var right = a.kind === "event"
-        ? Icons.svg("zap") + "이벤트 대응"
-        : effectsText(a.effects) || "—";
-      item.innerHTML = '<span class="label"></span><span class="kind">' + right + "</span>";
-      item.querySelector(".label").textContent = a.label;
-      item.onclick = function () { onPick(a.id); };
-      list.appendChild(item);
+      var card = document.createElement("button");
+      card.type = "button";
+      card.className = "action-card" + (a.kind === "event" ? " event" : "");
+
+      var icon = a.kind === "event" ? "zap" : (ACTION_ICON[a.id] || "calendar");
+      card.innerHTML =
+        '<span class="a-icon">' + Icons.svg(icon) + "</span>" +
+        '<span class="a-body"><span class="a-label"></span>' +
+        '<span class="a-chips"></span></span>';
+      card.querySelector(".a-label").textContent = a.label;
+
+      var chips = card.querySelector(".a-chips");
+      if (a.kind === "event") {
+        var tag = document.createElement("span");
+        tag.className = "chip event-chip";
+        tag.textContent = "이벤트 대응";
+        chips.appendChild(tag);
+      } else {
+        var made = effectChips(a.effects);
+        if (!made.length) {
+          var none = document.createElement("span");
+          none.className = "chip none";
+          none.textContent = "변화 없음";
+          chips.appendChild(none);
+        } else made.forEach(function (c) { chips.appendChild(c); });
+      }
+
+      card.onclick = function () { onPick(a.id); };
+      list.appendChild(card);
     });
     $("compose-modal").classList.remove("hidden");
   }
