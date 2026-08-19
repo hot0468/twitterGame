@@ -142,6 +142,15 @@
 
     // 쪽지: 대화방 열기(목록 행·프로필 버튼)와 말 걸기.
     // 방을 열면 읽은 것으로 처리한다 — 알림과 같은 규칙이다.
+    // 스토리 선택. 기존 dm-say와 같은 data-dm-to를 쓰지만 속성이 달라 서로 안 겹친다.
+    // 하루를 안 쓰므로 resolveTurn을 거치지 않는다(기존 DM과 같다).
+    var storyBtn = e.target.closest("[data-story-idx]");
+    if (storyBtn) {
+      game.sendStory(storyBtn.dataset.dmTo, Number(storyBtn.dataset.storyIdx));
+      save(game.getState());
+      refresh();
+      return;
+    }
     var dmSay = e.target.closest("[data-dm-say]");
     if (dmSay) {
       game.sendDm(dmSay.dataset.dmTo, Number(dmSay.dataset.dmSay));

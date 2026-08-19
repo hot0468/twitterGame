@@ -538,6 +538,11 @@
   function renderDm(state) {
     var accounts = gameNow ? gameNow.dmAccounts() : [];
     var rooms = state.dms || {};
+    // 스토리가 시작된 계정도 대화방이 있다. dmAccounts()는 accounts(선택지 풀)만 세므로
+    // state.dms에 방이 있는 계정을 합친다 — 스토리 계정은 goStory가 방을 만든다.
+    Object.keys(rooms).forEach(function (h) {
+      if (accounts.indexOf(h) === -1) accounts.push(h);
+    });
     var room = function (h) { return rooms[h] || { msgs: [], seen: 0 }; };
     var inRoom = dmHandle && accounts.indexOf(dmHandle) !== -1;
 
@@ -585,8 +590,15 @@
     // 자유 입력이 아니라 고를 말이다. 어느 말이 남았는지는 엔진이 안다.
     var ch = $("dm-choices");
     ch.innerHTML = "";
-    var choices = gameNow ? gameNow.getDmChoices(dmHandle) : [];
+    // 스토리 계정이면 스토리 선택지를, 아니면 기존 선택지 풀을 쓴다.
+    // 대기 중(행동을 기다리는 중)이면 스토리 쪽이 빈 배열을 주고, 그러면 아무것도 안 그린다 —
+    // "기다리는 중" 같은 표시를 넣지 말 것. 침묵이 이 이야기의 연출이다.
+    var story = gameNow ? gameNow.storyChoices(dmHandle) : [];
+    var isStory = story.length > 0;
+    var choices = isStory ? story : (gameNow ? gameNow.getDmChoices(dmHandle) : []);
     if (!choices.length) {
+      // 스토리가 대기·지연 중일 때는 이 침묵 자체가 연출이다 — "더 할 말이…" 문구를 넣지 않는다.
+      if (isStory || (gameNow && gameNow.dmAccounts().indexOf(dmHandle) === -1)) return;
       var done = document.createElement("p");
       done.className = "dm-done";
       done.textContent = "더 할 말이 떠오르지 않는다.";
@@ -596,9 +608,12 @@
     choices.forEach(function (c) {
       var b = document.createElement("button");
       b.className = "dm-say";
-      b.dataset.dmSay = c.idx;
+      // 스토리 선택은 dmSay 대신 storyIdx를 단다 — 기존 sendDm 핸들러로 새면 안 된다
+      if (isStory) b.dataset.storyIdx = c.idx;
+      else b.dataset.dmSay = c.idx;
       b.dataset.dmTo = dmHandle;
-      b.textContent = c.label;
+      // 기존 선택지는 label, 스토리 선택지는 say — 필드 이름이 다르다
+      b.textContent = isStory ? c.say : c.label;
       ch.appendChild(b);
     });
   }
@@ -729,7 +744,9 @@
     var fbtn = $("profile-follow");
     fbtn.classList.toggle("hidden", !npc);
     // 쪽지는 말을 튼 계정에만 — 전 계정에 열면 대사가 448개 트윗만큼 필요하다
-    var canDm = !!npc && gameNow && gameNow.dmAccounts().indexOf(handle) !== -1;
+    // 스토리가 시작된 계정도 방이 있다 — state.dms에 방이 생겼으면 들어갈 수 있다
+    var canDm = !!npc && gameNow &&
+      (gameNow.dmAccounts().indexOf(handle) !== -1 || !!(state.dms || {})[handle]);
     $("profile-dm").classList.toggle("hidden", !canDm);
     if (canDm) $("profile-dm").dataset.dm = handle;
     if (npc) {
