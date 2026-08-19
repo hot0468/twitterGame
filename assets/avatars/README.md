@@ -44,3 +44,5 @@ svg를 빠뜨리면 그 계정만 아바타가 깨진다(회귀 테스트가 잡
 | mutuals_only | `#c4f0c5` | ad_detector | `#f9c0c0` |
 | numbers_guy | `#d1d4f9` | rookie_writer | `#e0f0d5` |
 | lurker_9 | `#e6e6e6` | old_records | `#d8d0c0` |
+| anime_burn | `#ffd9e8` | otaku_wallet | `#cfe3d4` |
+| sakuga_note | `#e0dcf5` | | |
