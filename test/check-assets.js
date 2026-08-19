@@ -12,6 +12,28 @@ var gen = data.timeline.gen;
 
 function has(name) { return fs.existsSync(path.join(dir, name + ".svg")); }
 
+// ── ui.js가 표기용으로 복제한 GAIN_MAX/ATTR_STAT가 data/npcs.js의 reaction과 맞는지 ──
+// js/ui.js는 DOM 없이 require는 되지만 GAIN_MAX·ATTR_STAT는 export되지 않는 클로저 변수라
+// (check-css.js가 이미 쓰는 관례대로) 소스를 텍스트로 읽어 값을 뽑아 대조한다.
+// 한쪽만 바꾸면 게이지 칸 수나 배지 색이 조용히 어긋나므로 테스트로 묶어둔다.
+var uiSrc = fs.readFileSync(path.join(root, "js", "ui.js"), "utf8");
+
+var gainMaxMatch = /GAIN_MAX\s*=\s*(\d+)/.exec(uiSrc);
+assert.ok(gainMaxMatch, "js/ui.js에서 GAIN_MAX를 못 찾았다");
+assert.strictEqual(Number(gainMaxMatch[1]), data.reaction.perPoint,
+  "ui.js의 GAIN_MAX(" + gainMaxMatch[1] + ")가 data/npcs.js의 reaction.perPoint(" +
+  data.reaction.perPoint + ")와 다르다 — 게이지 칸 수가 어긋난다");
+
+var attrStatMatch = /ATTR_STAT\s*=\s*\{([^}]*)\}/.exec(uiSrc);
+assert.ok(attrStatMatch, "js/ui.js에서 ATTR_STAT을 못 찾았다");
+var uiAttrStat = {};
+attrStatMatch[1].split(",").forEach(function (pair) {
+  var m = /"?(\w+)"?\s*:\s*"([^"]+)"/.exec(pair);
+  if (m) uiAttrStat[m[1]] = m[2];
+});
+assert.deepStrictEqual(uiAttrStat, data.reaction.attrStat,
+  "ui.js의 ATTR_STAT이 data/npcs.js의 reaction.attrStat과 다르다 — 배지 색이 어긋난다");
+
 // 트윗 항목은 문자열이거나 { t: 본문, a: 속성 } 객체다
 function tweetText(raw) { return typeof raw === "string" ? raw : raw.t; }
 
