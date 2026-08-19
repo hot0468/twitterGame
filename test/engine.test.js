@@ -43,6 +43,7 @@ function loadData() {
   Object.assign(d, require("../data/actions.js"));
   Object.assign(d, require("../data/npcs.js"));
   Object.assign(d, require("../data/dms.js"));
+  Object.assign(d, require("../data/ads.js"));
   Object.assign(d, require("../data/events.js"));
   Object.assign(d, require("../data/endings.js"));
   return d;
@@ -243,9 +244,10 @@ var r2 = g5.advanceTurn("meme", false);
 assert.strictEqual(g5.getState().day, 2, "트윗 안 해도 하루는 지난다");
 assert.strictEqual(g5.getState().stats.유머, 7, "행동 효과는 트윗 여부와 무관");
 assert.strictEqual(g5.getState().followers, 10, "트윗 안 하면 팔로워 불변");
+// NPC 트윗과 광고는 나와 무관하게 흐르므로 뺀다 — 이 단언이 재는 건 "내 흔적"이다
 assert.strictEqual(r2.feedItems.filter(function (f) {
-  return f.kind !== "npc";
-}).length, 0, "트윗 안 하면 내 흔적은 피드에 안 남는다 (NPC 트윗은 계속 흐른다)");
+  return f.kind !== "npc" && f.kind !== "ad";
+}).length, 0, "트윗 안 하면 내 흔적은 피드에 안 남는다 (NPC 트윗·광고는 계속 흐른다)");
 assert.strictEqual(g5.getState().tweetLog.length, 0);
 
 // 리스크는 트윗 쪽에만 있다 (떡밥: 논란성 +5, 멘탈 -5)
@@ -474,7 +476,7 @@ assert.strictEqual(g10.getState().ending, "author");
 
 var g11 = Engine.create(loadData(), null, function () { return 0.99; });
 g11.getState().followers = GOAL;
-g11.getState().stats.논란성 = 50;
+g11.getState().stats.논란성 = 300;
 g11.getState().stats.유머 = 40;
 var r7 = g11.advanceTurn("meme", false);
 assert.strictEqual(r7.ending.id, "cyber_wrecker", "논란성 조건이 topStat보다 우선(list 순서)");
@@ -667,8 +669,11 @@ var beforeDay = gRe.getState().day;
 var beforeStats = JSON.stringify(gRe.getState().stats);
 var beforeFollowers = gRe.getState().followers;
 var res = gRe.toggleReaction(someTweet.id, "like");
-assert.deepStrictEqual(res, { id: someTweet.id, kind: "like", on: true }, "누르면 켜진다");
+assert.strictEqual(res.id, someTweet.id);
+assert.strictEqual(res.kind, "like");
+assert.strictEqual(res.on, true, "누르면 켜진다");
 assert.strictEqual(gRe.getState().day, beforeDay, "반응은 하루를 소모하지 않는다");
+// 반응 한 번은 perPoint(5) 미만이라 레벨업하지 않으므로 스탯은 그대로다
 assert.strictEqual(JSON.stringify(gRe.getState().stats), beforeStats, "스탯을 건드리지 않는다");
 assert.strictEqual(gRe.getState().followers, beforeFollowers, "팔로워도 안 늘어난다");
 assert.strictEqual(gRe.getState().reacted[someTweet.id].like, true, "누른 기록이 남는다");
@@ -874,3 +879,736 @@ assert.strictEqual(gOldD.unreadDms(), 0);
 console.log("디엠 OK (" + dmHandles.length + "계정, 인사말 " + maxOpens + "개)");
 
 console.log("Task 6 OK");
+
+// --- 트윗 속성: 데이터 노브 ---
+var rx = loadData().reaction;
+assert.ok(rx, "GAME_DATA.reaction이 있어야 한다");
+assert.strictEqual(rx.perPoint, 5, "5개마다 스탯 +1");
+assert.strictEqual(rx.attrStat.humor, "유머");
+assert.strictEqual(rx.attrStat.info, "글빨");
+assert.strictEqual(rx.attrStat.daily, "감각");
+assert.strictEqual(rx.attrStat.bait, "논란성");
+// 모든 계정의 첫 카테고리가 매핑에 있어야 한다 — 없으면 그 계정 트윗은 스탯을 못 준다
+loadData().npcs.forEach(function (n) {
+  assert.ok(rx.attrStat[n.reactsTo[0]],
+    n.handle + "의 첫 카테고리 " + n.reactsTo[0] + "가 attrStat에 없다");
+});
+
+console.log("트윗 속성 OK");
+
+// --- 트윗 속성: 계정 기본값과 트윗별 예외 ---
+// 모든 보관함 트윗이 유효한 속성을 갖는다.
+// startFollowing: 0이라 갓 만든 게임은 보관함이 비어 있다 — 턴을 돌려 채워야 실제로 검증된다
+// (gLen과 같은 패턴: npcSeen을 직접 채우고 advanceTurn을 여러 번 돈다).
+var gAttr = Engine.create(loadData(), null, function () { return 0.5; });
+loadData().npcs.forEach(function (n) { gAttr.getState().npcSeen[n.handle] = 1; });
+for (var tAttr = 0; tAttr < 12; tAttr++) gAttr.advanceTurn("meme", true);
+var sAttr = gAttr.getState();
+var attrStatMap = loadData().reaction.attrStat;
+var checkedAttrTweets = 0;
+Object.keys(sAttr.npcTweets).forEach(function (h) {
+  sAttr.npcTweets[h].forEach(function (t) {
+    assert.ok(t.attr, h + "의 트윗에 attr이 없다: " + t.text);
+    assert.ok(attrStatMap[t.attr], "알 수 없는 attr: " + t.attr);
+    checkedAttrTweets++;
+  });
+});
+assert.ok(checkedAttrTweets > 100,
+  "보관함이 실제로 찼는지 확인(공허한 검사 방지): " + checkedAttrTweets + "개");
+
+// 객체 표기 { t, a }가 계정 기본값을 덮어쓴다
+var dOverride = loadData();
+dOverride.npcs = [{ handle: "@t_attr", name: "테스트", bio: "b", followers: 100,
+  reactsTo: ["humor"], replies: ["r"],
+  tweets: [{ t: "떡밥으로 지정한 트윗입니다", a: "bait" }] }];
+dOverride.timeline = Object.assign({}, dOverride.timeline, { startFollowing: 1 });
+var gOv = Engine.create(dOverride);
+var boxOv = gOv.getState().npcTweets["@t_attr"];
+assert.ok(boxOv && boxOv.length, "보관함이 채워져야 한다");
+assert.strictEqual(boxOv[0].attr, "bait", "객체 표기가 계정 기본값(humor)을 덮어쓴다");
+assert.strictEqual(boxOv[0].text, "떡밥으로 지정한 트윗입니다", "text에 표기가 새어나오면 안 된다");
+assert.strictEqual(boxOv[0].src, "떡밥으로 지정한 트윗입니다", "src도 본문 문자열이다");
+
+console.log("트윗 속성 파싱 OK");
+
+// --- 반응 카운터와 스탯 상승 ---
+// 트윗이 전부 humor인 계정 하나만 두고 시작한다 — 카운터를 정확히 셀 수 있다
+function reactData(handle, cat, prefix) {
+  var d = loadData();
+  d.npcs = [{ handle: handle, name: "테스트", bio: "b", followers: 100,
+    reactsTo: [cat], replies: ["r"],
+    tweets: [prefix + " 첫번째 트윗입니다", prefix + " 두번째 트윗입니다",
+             prefix + " 세번째 트윗입니다", prefix + " 네번째 트윗입니다",
+             prefix + " 다섯번째 트윗입니다", prefix + " 여섯번째 트윗입니다"] }];
+  d.timeline = Object.assign({}, d.timeline,
+    { startFollowing: 1, gen: Object.assign({}, d.timeline.gen, { seed: 6, max: 6 }) });
+  return d;
+}
+function reactGame() { return Engine.create(reactData("@t_react", "humor", "가")); }
+
+var gR = reactGame();
+var boxR = gR.getState().npcTweets["@t_react"];
+assert.strictEqual(boxR.length, 6, "보관함에 6개");
+
+// 첫 반응: 카운터 1, 스탯은 아직 그대로
+var humor0 = gR.getState().stats.유머;
+var r1 = gR.toggleReaction(boxR[0].id, "like");
+assert.strictEqual(r1.gain.stat, "유머");
+assert.strictEqual(r1.gain.count, 1);
+assert.strictEqual(r1.gain.leveled, false);
+assert.strictEqual(gR.getState().stats.유머, humor0, "1개로는 안 오른다");
+
+// 같은 트윗을 리트윗해도 추가로 세지 않는다 (트윗당 1회)
+var r2 = gR.toggleReaction(boxR[0].id, "rt");
+assert.strictEqual(r2.gain, null, "이미 센 트윗은 gain이 null");
+assert.strictEqual(gR.getState().reactCount.유머, 1, "카운터가 안 늘어야 한다");
+
+// 취소해도 되돌리지 않는다
+gR.toggleReaction(boxR[0].id, "like");
+assert.strictEqual(gR.getState().reactCount.유머, 1, "취소해도 카운터 유지");
+// 다시 눌러도 추가되지 않는다 — 없으면 켜고 끄기로 무한 증식한다
+gR.toggleReaction(boxR[0].id, "like");
+assert.strictEqual(gR.getState().reactCount.유머, 1, "재반응해도 카운터 유지");
+
+// 5개를 채우면 +1, 카운터는 0으로
+for (var iR = 1; iR < 5; iR++) gR.toggleReaction(boxR[iR].id, "like");
+assert.strictEqual(gR.getState().stats.유머, humor0 + 1, "5개 채우면 +1");
+assert.strictEqual(gR.getState().reactCount.유머, 0, "카운터는 0으로");
+assert.strictEqual(gR.getState().stats.유머 % 1, 0, "스탯은 정수");
+
+// 5번째 반응의 gain이 leveled를 알린다
+var gR2 = reactGame();
+var boxR2 = gR2.getState().npcTweets["@t_react"];
+for (var jR = 0; jR < 4; jR++) gR2.toggleReaction(boxR2[jR].id, "like");
+var r5 = gR2.toggleReaction(boxR2[4].id, "like");
+assert.strictEqual(r5.gain.leveled, true, "5번째는 leveled");
+assert.strictEqual(r5.gain.count, 0, "오른 직후 카운터는 0");
+
+// 반응은 하루를 소모하지 않는다
+assert.strictEqual(gR2.getState().day, 1, "반응해도 날짜가 안 넘어간다");
+
+// bait 속성은 논란성을 올린다
+var gB = Engine.create(reactData("@t_bait", "bait", "나"));
+var boxB = gB.getState().npcTweets["@t_bait"];
+var con0 = gB.getState().stats.논란성;
+for (var kR = 0; kR < 5; kR++) gB.toggleReaction(boxB[kR].id, "like");
+assert.strictEqual(gB.getState().stats.논란성, con0 + 1, "bait는 논란성을 올린다");
+
+// 모르는 입력은 null
+assert.strictEqual(gR.toggleReaction("없는id", "like"), null);
+assert.strictEqual(gR.toggleReaction(boxR[0].id, "이상한kind"), null);
+
+// 옛 세이브에 reactCount가 없어도 채워진다
+var savedOld = JSON.parse(JSON.stringify(reactGame().getState()));
+delete savedOld.reactCount;
+var gOld = Engine.create(reactData("@t_react", "humor", "가"), savedOld);
+assert.ok(gOld.getState().reactCount, "reactCount가 채워져야 한다");
+assert.strictEqual(gOld.getState().reactCount.유머, 0);
+
+// 옛 세이브의 트윗에 attr이 채워진다 — 없으면 그 트윗은 영영 스탯을 안 준다
+var savedNoAttr = JSON.parse(JSON.stringify(reactGame().getState()));
+Object.keys(savedNoAttr.npcTweets).forEach(function (h) {
+  savedNoAttr.npcTweets[h].forEach(function (t) { delete t.attr; });
+});
+var gNoAttr = Engine.create(reactData("@t_react", "humor", "가"), savedNoAttr);
+var boxNA = gNoAttr.getState().npcTweets["@t_react"];
+assert.strictEqual(boxNA[0].attr, "humor", "옛 세이브 트윗에 계정 기본 속성이 채워진다");
+
+// attrStat에 없는 속성(오타·누락)이면 gain은 null이지만 gained가 찍히면 안 된다 —
+// 매핑을 고친 뒤 같은 트윗에 다시 반응하면 카운터가 올라야 한다(Important 3)
+var dNoMap = reactData("@t_unmapped", "ghost", "다"); // ghost는 attrStat에 없는 카테고리
+var gUnmapped = Engine.create(dNoMap);
+var boxUnmapped = gUnmapped.getState().npcTweets["@t_unmapped"];
+var rUnmapped = gUnmapped.toggleReaction(boxUnmapped[0].id, "like");
+assert.strictEqual(rUnmapped.gain, null, "매핑에 없는 속성은 gain이 null");
+assert.strictEqual(gUnmapped.getState().reacted[boxUnmapped[0].id].gained, undefined,
+  "매핑에 없으면 gained를 찍지 않는다 — 안 찍어야 매핑을 고친 뒤 다시 셀 수 있다");
+
+// 매핑을 고친 뒤(런타임 데이터를 바꾼 것처럼) 같은 트윗에 다시 반응하면 카운터가 오른다.
+// 좋아요는 이미 켜져 있으므로(gained가 안 찍혔을 뿐 on은 true) 리트윗으로 다시 반응해본다.
+dNoMap.reaction.attrStat.ghost = "유머";
+var gFixed = Engine.create(dNoMap, gUnmapped.getState());
+var rFixed = gFixed.toggleReaction(boxUnmapped[0].id, "rt");
+assert.strictEqual(rFixed.gain.stat, "유머", "매핑을 고치면 같은 트윗도 다시 셀 수 있다");
+assert.strictEqual(rFixed.gain.count, 1);
+
+console.log("반응 카운터와 스탯 상승 OK");
+
+// --- 하루 반응 한도 (dailyCap) ---
+// 검색 화면이 모든 계정의 보관함을 한 화면에 모아주므로, 트윗당 1회 상한만으로는
+// 하루에 수백 개를 몰아 눌러 스탯을 폭증시킬 수 있었다(Critical 2). 카운터가 오르는
+// 반응 자체를 하루 dailyCap개로 제한한다 — 반응(좋아요/리트윗 토글)은 한도와 무관하게
+// 항상 정상 동작해야 하고, 한도 초과分은 gained를 찍지 않아 다음 날 다시 셀 수 있어야 한다.
+function capData(cap) {
+  var d = loadData();
+  var tweets = [];
+  for (var i = 0; i < 24; i++) tweets.push("한도 테스트 트윗 " + i + "번입니다");
+  d.npcs = [{ handle: "@t_cap", name: "테스트", bio: "b", followers: 100,
+    reactsTo: ["humor"], replies: ["r"], tweets: tweets }];
+  // max(20)가 트윗 수(24)보다 작아야 advanceTurn 이후에도 addTweets가 새 트윗을 낼 여유가 있다
+  // (check-assets.js가 실제 데이터에 강제하는 것과 같은 관계).
+  d.timeline = Object.assign({}, d.timeline,
+    { startFollowing: 1, gen: Object.assign({}, d.timeline.gen, { seed: 20, max: 20 }) });
+  d.reaction = Object.assign({}, d.reaction, { dailyCap: cap });
+  return d;
+}
+
+// 한도(3)까지는 카운터가 오른다
+var dCap = capData(3);
+var gCap = Engine.create(dCap);
+var boxCap = gCap.getState().npcTweets["@t_cap"];
+for (var iCap = 0; iCap < 3; iCap++) {
+  var rCap = gCap.toggleReaction(boxCap[iCap].id, "like");
+  assert.strictEqual(rCap.gain.stat, "유머", "한도 안에서는 카운터가 오른다 (idx " + iCap + ")");
+  assert.strictEqual(rCap.gain.count, iCap + 1);
+}
+assert.strictEqual(gCap.getState().reactCount.유머, 3, "한도(3)까지 정확히 3 누적");
+
+// 한도를 넘으면: 반응(좋아요) 자체는 켜지지만 카운터는 안 오르고 gain은 null
+var rOver = gCap.toggleReaction(boxCap[3].id, "like");
+assert.strictEqual(rOver.gain, null, "한도 초과 시 gain은 null");
+assert.strictEqual(rOver.on, true, "한도를 넘어도 반응 자체는 정상 동작(켜짐)");
+assert.strictEqual(gCap.getState().reacted[boxCap[3].id].like, true, "좋아요 상태가 실제로 저장된다");
+assert.strictEqual(gCap.getState().reactCount.유머, 3, "한도 초과분은 카운터에 안 잡힌다");
+
+// 한도 초과 트윗은 gained를 안 찍는다 — 다음 날 다시 누르면 카운터가 올라야 한다
+assert.strictEqual(gCap.getState().reacted[boxCap[3].id].gained, undefined,
+  "한도 초과 트윗은 gained가 안 찍혀야 다음 날 다시 셀 수 있다");
+
+// 리트윗도 같은 한도를 공유한다(따로 3개를 더 허용하면 안 된다)
+var rOverRt = gCap.toggleReaction(boxCap[4].id, "rt");
+assert.strictEqual(rOverRt.gain, null, "리트윗도 같은 하루 한도를 공유한다");
+assert.strictEqual(rOverRt.on, true, "한도를 넘어도 리트윗 자체는 정상 동작");
+
+// 취소도 여전히 자유롭다(한도와 무관)
+var rToggleOff = gCap.toggleReaction(boxCap[3].id, "like");
+assert.strictEqual(rToggleOff.on, false, "한도 초과 트윗도 취소는 된다");
+var rToggleOn = gCap.toggleReaction(boxCap[3].id, "like");
+assert.strictEqual(rToggleOn.on, true, "다시 켤 수도 있다");
+assert.strictEqual(rToggleOn.gain, null, "여전히 오늘 한도 안에서는 gain이 없다");
+
+// 날짜가 바뀌면 한도(reactDay.used)가 리셋된다 — advanceTurn으로 하루를 넘긴다.
+// reactCount(perPoint 누적기)는 한도와 별개라 날짜가 바뀌어도 그대로 이어진다 —
+// 어제 3개를 세었으므로 오늘 첫 반응은 4번째다.
+gCap.advanceTurn("rest", false);
+assert.strictEqual(gCap.getState().day, 2, "하루가 넘어갔다");
+var rNextDay = gCap.toggleReaction(boxCap[3].id, "like"); // 어제 한도 초과로 gained가 안 찍힌 트윗
+assert.strictEqual(rNextDay.gain.stat, "유머", "날짜가 바뀌면 한도가 리셋돼 다시 셀 수 있다");
+assert.strictEqual(rNextDay.gain.count, 4, "reactCount는 한도와 별개라 어제(3)에 이어 4");
+assert.strictEqual(gCap.getState().reactDay.used, 1, "reactDay.used는 새 날 1부터");
+
+// dailyCap이 없는 옛 세이브도 안전하게 동작한다(missing 맵이 최상위 필드를 채운다)
+var savedNoReactDay = JSON.parse(JSON.stringify(reactGame().getState()));
+delete savedNoReactDay.reactDay;
+var gOldCap = Engine.create(reactData("@t_react", "humor", "가"), savedNoReactDay);
+assert.ok(gOldCap.getState().reactDay, "reactDay가 채워져야 한다");
+
+console.log("하루 반응 한도 OK");
+
+// --- 산책하기 ---
+var gWalk = Engine.create(loadData());
+var walkIds = gWalk.getActions().map(function (a) { return a.id; });
+assert.ok(walkIds.indexOf("walk") !== -1, "산책하기는 처음부터 고를 수 있다");
+
+var beforeWalk = gWalk.getState().stats;
+var m0 = beforeWalk.멘탈, s0 = beforeWalk.감각;
+gWalk.advanceTurn("walk", false);
+var afterWalk = gWalk.getState().stats;
+assert.strictEqual(afterWalk.멘탈, Math.min(m0 + 8, m0 + 8), "산책은 멘탈 +8");
+assert.strictEqual(afterWalk.감각, s0 + 1, "산책은 감각 +1");
+assert.strictEqual(gWalk.getState().day, 2, "산책도 하루를 쓴다");
+
+// 트윗으로 올릴 수도 있다
+var gWalk2 = Engine.create(loadData());
+var pv = gWalk2.previewAction("walk");
+assert.ok(pv, "산책하기에 미리보기가 있다");
+assert.strictEqual(pv.effects.멘탈, 8);
+assert.ok(pv.tweetEffects, "트윗 효과가 있다");
+
+console.log("산책하기 OK");
+
+// --- 계정별 반응 수 ---
+// 트윗이 전부 있는 계정 하나만 두고 센다
+function countData() {
+  var d = loadData();
+  d.npcs = [{ handle: "@t_count", name: "카운트", bio: "b", followers: 100,
+    reactsTo: ["info"], replies: ["r"],
+    tweets: ["가 첫번째 트윗입니다", "가 두번째 트윗입니다", "가 세번째 트윗입니다",
+             "가 네번째 트윗입니다", "가 다섯번째 트윗입니다", "가 여섯번째 트윗입니다"] }];
+  d.timeline = Object.assign({}, d.timeline,
+    { startFollowing: 1, gen: Object.assign({}, d.timeline.gen, { seed: 6, max: 6 }) });
+  return d;
+}
+var gCount = Engine.create(countData());
+var boxCount = gCount.getState().npcTweets["@t_count"];
+assert.strictEqual(gCount._reactionsOn("@t_count"), 0, "처음엔 0");
+gCount.toggleReaction(boxCount[0].id, "like");
+gCount.toggleReaction(boxCount[1].id, "rt");
+assert.strictEqual(gCount._reactionsOn("@t_count"), 2, "좋아요와 리트윗을 합산");
+// 같은 트윗을 또 눌러도 한 번만 센다
+gCount.toggleReaction(boxCount[0].id, "rt");
+assert.strictEqual(gCount._reactionsOn("@t_count"), 2, "트윗당 1회");
+// 취소해도 줄지 않는다 (gained가 남는다)
+gCount.toggleReaction(boxCount[0].id, "like");
+assert.strictEqual(gCount._reactionsOn("@t_count"), 2, "취소해도 유지");
+// 모르는 핸들은 0
+assert.strictEqual(gCount._reactionsOn("@없는계정"), 0);
+
+console.log("계정별 반응 수 OK");
+
+// --- 괴담계 스토리 DM ---
+// 조건을 갖춘 상태를 만든다: @old_records를 만나고, 트윗 5개에 반응하고, 감각 12 / 글빨 5
+function storyGame(overrides) {
+  var d = loadData();
+  var g = Engine.create(d);
+  var s = g.getState();
+  // 계정을 만난 것으로 하고 보관함을 채운다
+  s.npcSeen["@old_records"] = 1;
+  g.advanceTurn("rest", false);   // 보관함이 채워진다
+  s = g.getState();
+  Object.assign(s.stats, { 감각: 12, 글빨: 5 }, (overrides && overrides.stats) || {});
+  var box = s.npcTweets["@old_records"] || [];
+  var n = overrides && overrides.reactions != null ? overrides.reactions : 5;
+  for (var i = 0; i < n && i < box.length; i++) g.toggleReaction(box[i].id, "like");
+  return g;
+}
+
+// 조건을 다 갖추면 그 턴에 확정으로 첫 DM이 온다
+var gS = storyGame();
+assert.ok(!gS.getState().dmStory["@old_records"], "아직 시작 전");
+gS.advanceTurn("rest", false);
+var st = gS.getState().dmStory["@old_records"];
+assert.ok(st, "조건 충족 턴에 스토리가 시작된다");
+assert.strictEqual(st.node, "s1");
+var msgs = gS.getState().dms["@old_records"].msgs;
+assert.strictEqual(msgs.length, 1, "첫 인사 한 통");
+assert.strictEqual(msgs[0].me, false, "상대가 보낸 것");
+
+// 반응이 모자라면 시작 안 함
+var gLow = storyGame({ reactions: 4 });
+gLow.advanceTurn("rest", false);
+assert.ok(!gLow.getState().dmStory["@old_records"], "반응 4개로는 시작 안 함");
+
+// 감각이 낮으면 시작 안 함
+var gDull = storyGame({ stats: { 감각: 11 } });
+gDull.advanceTurn("rest", false);
+assert.ok(!gDull.getState().dmStory["@old_records"], "감각 11로는 시작 안 함");
+
+// 글빨이 높으면 시작 안 함
+var gSharp = storyGame({ stats: { 글빨: 20 } });
+gSharp.advanceTurn("rest", false);
+assert.ok(!gSharp.getState().dmStory["@old_records"], "글빨 20이면 시작 안 함");
+
+// 선택지를 고르면 다음 노드로 간다
+var ch = gS.storyChoices("@old_records");
+assert.strictEqual(ch.length, 2, "s1의 선택지 2개");
+gS.sendStory("@old_records", 0);
+assert.strictEqual(gS.getState().dmStory["@old_records"].node, "s2");
+assert.strictEqual(gS.getState().day, gS.getState().day, "스토리 선택은 하루를 안 쓴다");
+
+// s2는 대기 — 선택지가 없다
+assert.deepStrictEqual(gS.storyChoices("@old_records"), [], "s2는 대기라 선택지 없음");
+
+// 대기 중에는 확률 DM도 안 온다(스토리 계정은 후보에서 빠진다)
+var beforeCount = gS.getState().dms["@old_records"].msgs.length;
+for (var w = 0; w < 20; w++) gS.advanceTurn("rest", false);
+assert.strictEqual(gS.getState().dms["@old_records"].msgs.length, beforeCount,
+  "스토리 진행 중엔 잡담 DM이 안 온다");
+
+// 지연 답장: goStory로 s6에 가면 3일 뒤에 도착한다
+var gD = storyGame();
+gD.advanceTurn("rest", false);
+gD._goStory("@old_records", "s5");
+var lenBefore = gD.getState().dms["@old_records"].msgs.length;
+gD.sendStory("@old_records", 0);          // s5 → s6 (delay 3)
+assert.strictEqual(gD.getState().dmStory["@old_records"].node, "s5",
+  "지연 중엔 노드가 아직 안 옮겨진다");
+assert.ok(gD.getState().dmStory["@old_records"].pending, "pending이 잡힌다");
+gD.advanceTurn("rest", false);
+gD.advanceTurn("rest", false);
+assert.strictEqual(gD.getState().dmStory["@old_records"].node, "s5", "2일째엔 아직");
+gD.advanceTurn("rest", false);
+assert.strictEqual(gD.getState().dmStory["@old_records"].node, "s6", "3일째에 도착");
+assert.ok(gD.getState().dms["@old_records"].msgs.length > lenBefore, "답장이 쌓였다");
+
+// 끝에 도달하면 done이 되고 다시 시작 안 함
+var gE = storyGame();
+gE.advanceTurn("rest", false);
+gE._goStory("@old_records", "s7a");
+assert.strictEqual(gE.getState().dmStory["@old_records"].done, true, "끝 노드면 done");
+assert.deepStrictEqual(gE.storyChoices("@old_records"), [], "끝나면 선택지 없음");
+
+console.log("괴담계 스토리 DM OK");
+
+// --- 폐교 이벤트 ---
+// 스토리가 s2일 때 산책하면 발동한다
+var gW = storyGame();
+gW.advanceTurn("rest", false);              // 스토리 시작 (s1)
+gW.sendStory("@old_records", 0);            // s2 (대기)
+assert.strictEqual(gW.getState().dmStory["@old_records"].node, "s2");
+var r1 = gW.advanceTurn("walk", false);
+assert.ok(r1.triggeredEvents.indexOf("old_school") !== -1, "산책하면 폐교 이벤트가 뜬다");
+var evActs = gW.getActions().filter(function (a) { return a.kind === "event"; });
+assert.strictEqual(evActs.length, 2, "선택지 2개(사진/눈으로만)");
+
+// 다른 행동에선 안 뜬다
+var gW2 = storyGame();
+gW2.advanceTurn("rest", false);
+gW2.sendStory("@old_records", 0);
+var r2 = gW2.advanceTurn("rest", false);
+assert.strictEqual(r2.triggeredEvents.indexOf("old_school"), -1, "휴식으로는 안 뜬다");
+
+// 스토리가 s2가 아니면 산책해도 안 뜬다
+var gW3 = storyGame();
+gW3.advanceTurn("rest", false);             // s1에 머문다
+var r3 = gW3.advanceTurn("walk", false);
+assert.strictEqual(r3.triggeredEvents.indexOf("old_school"), -1, "s1에선 안 뜬다");
+
+// 스토리가 아예 없으면 산책해도 안 뜬다
+var gW4 = Engine.create(loadData());
+var r4 = gW4.advanceTurn("walk", false);
+assert.strictEqual(r4.triggeredEvents.indexOf("old_school"), -1, "스토리 없으면 안 뜬다");
+
+// 선택지가 스토리를 진행시킨다 — 사진(s4a, delay 2)
+var photoIdx = -1;
+gW.getActions().forEach(function (a, i) {
+  if (a.kind === "event" && a.label.indexOf("사진") !== -1) photoIdx = i;
+});
+assert.ok(photoIdx >= 0, "사진 선택지를 찾았다");
+var photoId = gW.getActions()[photoIdx].id;
+gW.advanceTurn(photoId, false);
+var stW = gW.getState().dmStory["@old_records"];
+assert.ok(stW.pending, "delay 2라 예약된다");
+assert.strictEqual(stW.pending.to, "s4a");
+// delay 2는 턴을 두 번 더 돌아야 온다. 한 번만 돌고 검사하면 1일 뒤를 재는 셈이다.
+gW.advanceTurn("rest", false);
+assert.strictEqual(gW.getState().dmStory["@old_records"].node, "s2", "1일 뒤엔 아직");
+gW.advanceTurn("rest", false);
+assert.strictEqual(gW.getState().dmStory["@old_records"].node, "s4a", "2일 뒤 도착");
+
+// 눈으로만은 즉시 s4b
+var gV = storyGame();
+gV.advanceTurn("rest", false);
+gV.sendStory("@old_records", 0);
+gV.advanceTurn("walk", false);
+var eyeId = null;
+gV.getActions().forEach(function (a) {
+  if (a.kind === "event" && a.label.indexOf("눈으로") !== -1) eyeId = a.id;
+});
+assert.ok(eyeId, "눈으로만 선택지를 찾았다");
+gV.advanceTurn(eyeId, false);
+assert.strictEqual(gV.getState().dmStory["@old_records"].node, "s4b", "즉시 도착");
+
+console.log("폐교 이벤트 OK");
+
+// --- 이벤트 선택지의 delay가 정확히 N일인가 ---
+// 이벤트 선택은 advanceTurn 맨 앞에서 처리되는데 그 시점의 state.day는 아직 오늘이다.
+// 이 턴이 끝나며 날짜가 넘어가고 곧바로 tickStories()가 돌기 때문에, 보정이 없으면
+// delay 2가 1일로 작동한다(실제로 겪음). sendStory는 하루를 안 써서 이 문제가 없다.
+var gDly = storyGame();
+gDly.advanceTurn("rest", false);            // s1
+gDly.sendStory("@old_records", 0);          // s2 (대기)
+gDly.advanceTurn("walk", false);            // 폐교 이벤트
+var photoAct = null;
+gDly.getActions().forEach(function (a) {
+  if (a.kind === "event" && a.label.indexOf("사진") !== -1) photoAct = a.id;
+});
+gDly.advanceTurn(photoAct, false);          // 사진 → s4a는 delay 2
+assert.strictEqual(gDly.getState().dmStory["@old_records"].node, "s2",
+  "사진을 찍은 턴에는 아직 s2 (예약만 잡힌다)");
+gDly.advanceTurn("rest", false);
+assert.strictEqual(gDly.getState().dmStory["@old_records"].node, "s2",
+  "delay 2라 1일 뒤엔 아직 안 온다");
+gDly.advanceTurn("rest", false);
+assert.strictEqual(gDly.getState().dmStory["@old_records"].node, "s4a",
+  "2일 뒤에 도착한다");
+
+// delay가 없는 선택지는 그 턴에 바로 도착한다
+var gNow = storyGame();
+gNow.advanceTurn("rest", false);
+gNow.sendStory("@old_records", 0);
+gNow.advanceTurn("walk", false);
+var eyeAct = null;
+gNow.getActions().forEach(function (a) {
+  if (a.kind === "event" && a.label.indexOf("눈으로") !== -1) eyeAct = a.id;
+});
+gNow.advanceTurn(eyeAct, false);
+assert.strictEqual(gNow.getState().dmStory["@old_records"].node, "s4b",
+  "delay 없는 선택지는 즉시 도착");
+
+console.log("이벤트 delay OK");
+
+// --- 선택지 형식이 두 갈래에서 같은가 ---
+// 같은 선택지 바에 그려지므로 형식이 다르면 UI가 분기해야 하고,
+// 한쪽만 고치면 버튼이 빈칸으로 나온다(실제로 겪음).
+var gFmt = storyGame();
+gFmt.advanceTurn("rest", false);
+var fmtStory = gFmt.storyChoices("@old_records");
+assert.ok(fmtStory.length > 0, "s1에 선택지가 있다");
+assert.ok(typeof fmtStory[0].label === "string" && fmtStory[0].label.length > 0,
+  "스토리 선택지는 { idx, label } — label에 글자가 있다");
+assert.strictEqual(fmtStory[0].say, undefined, "say 필드는 쓰지 않는다");
+
+// 기존 DM 선택지도 같은 형식이어야 한다
+var sFmt = gFmt.getState();
+sFmt.npcSeen["@mutuals_only"] = 1;
+gFmt.advanceTurn("rest", false);
+var fmtDm = gFmt.getDmChoices("@mutuals_only");
+assert.ok(fmtDm.length > 0, "기존 계정에 선택지가 있다");
+assert.ok(typeof fmtDm[0].label === "string", "기존 선택지도 { idx, label }");
+
+// 스토리 계정 판별은 엔진이 한다 — UI가 "선택지가 비었는가"로 가르면
+// 대기 중에 기존 getDmChoices로 넘어가 accounts에 없는 계정에서 터진다.
+assert.strictEqual(gFmt.isStoryAccount("@old_records"), true);
+assert.strictEqual(gFmt.isStoryAccount("@mutuals_only"), false);
+assert.strictEqual(gFmt.isStoryAccount("@없는계정"), false);
+
+console.log("선택지 형식 OK");
+
+// --- 반응 수가 턴을 넘겨도 유지되는가 ---
+// 보관함은 max를 넘으면 오래된 것부터 밀려난다(perDay 2). 반응 수를 보관함에서 세면
+// 반응 기록이 하루 2개씩 증발해서, 몰아서 좋아요한 플레이어는 스토리 조건을 영영 못 채운다.
+// (실제로 겪음 — 감각 조건이 열리는 날엔 이미 카운트가 0이었다)
+var gKeep = Engine.create(loadData());
+gKeep.getState().npcSeen["@old_records"] = 1;
+gKeep.advanceTurn("rest", false);                     // 보관함이 채워진다
+var boxKeep = gKeep.getState().npcTweets["@old_records"];
+for (var iK = 0; iK < 5; iK++) gKeep.toggleReaction(boxKeep[iK].id, "like");
+assert.strictEqual(gKeep._reactionsOn("@old_records"), 5, "반응 직후 5개");
+var firstId = boxKeep[0].id;
+for (var tK = 0; tK < 8; tK++) gKeep.advanceTurn("rest", false);
+assert.ok(!gKeep.getState().npcTweets["@old_records"].some(function (t) { return t.id === firstId; }),
+  "8턴이면 첫 트윗은 보관함에서 밀려난다 (이 테스트의 전제)");
+assert.strictEqual(gKeep._reactionsOn("@old_records"), 5,
+  "밀려나도 반응 수는 유지된다 (reacted에서 세므로)");
+
+// 계정별로 따로 센다
+var otherBox = null, otherHandle = null;
+var stK = gKeep.getState();
+Object.keys(stK.npcTweets).forEach(function (h) {
+  if (h !== "@old_records" && !otherHandle && stK.npcTweets[h].length) {
+    otherHandle = h; otherBox = stK.npcTweets[h];
+  }
+});
+if (otherHandle) {
+  gKeep.toggleReaction(otherBox[0].id, "like");
+  assert.strictEqual(gKeep._reactionsOn("@old_records"), 5, "남의 계정 반응은 안 섞인다");
+  assert.ok(gKeep._reactionsOn(otherHandle) >= 1, "그 계정 쪽이 늘어난다");
+}
+
+// 옛 세이브: reacted에 author가 없어도 보관함에 남은 것은 채워진다.
+// 아직 안 밀려난 시점에 재야 한다 — 밀려난 트윗은 되살릴 근거가 없다(그건 보정 전과 같은 수준).
+var gMig = Engine.create(loadData());
+gMig.getState().npcSeen["@old_records"] = 1;
+gMig.advanceTurn("rest", false);
+var boxMig = gMig.getState().npcTweets["@old_records"];
+for (var iM = 0; iM < 3; iM++) gMig.toggleReaction(boxMig[iM].id, "like");
+var savedNoAuthor = JSON.parse(JSON.stringify(gMig.getState()));
+Object.keys(savedNoAuthor.reacted).forEach(function (id) { delete savedNoAuthor.reacted[id].author; });
+var gAuthor = Engine.create(loadData(), savedNoAuthor);
+assert.strictEqual(gAuthor._reactionsOn("@old_records"), 3,
+  "옛 세이브도 보관함에 남은 반응은 되살린다");
+
+console.log("반응 수 유지 OK");
+
+// --- 쓰다가지움 스토리 (두 번째 스토리) ---
+// 괴담계와 정반대 조건(글빨 >= 15)이라 서로 다른 플레이어에게 열린다.
+function writerGame(overrides) {
+  var g = Engine.create(loadData());
+  var s = g.getState();
+  s.npcSeen["@rookie_writer"] = 1;
+  g.advanceTurn("rest", false);              // 보관함이 채워진다
+  s = g.getState();
+  s.stats.글빨 = 15;
+  Object.assign(s.stats, (overrides && overrides.stats) || {});
+  var box = s.npcTweets["@rookie_writer"] || [];
+  var n = overrides && overrides.reactions != null ? overrides.reactions : 5;
+  for (var i = 0; i < n && i < box.length; i++) g.toggleReaction(box[i].id, "like");
+  return g;
+}
+
+var gWr = writerGame();
+gWr.advanceTurn("rest", false);
+assert.strictEqual(gWr.getState().dmStory["@rookie_writer"].node, "w1",
+  "조건 충족 턴에 시작한다");
+
+// 글빨이 모자라면 시작 안 함
+var gWrLow = writerGame({ stats: { 글빨: 14 } });
+gWrLow.advanceTurn("rest", false);
+assert.ok(!gWrLow.getState().dmStory["@rookie_writer"], "글빨 14면 시작 안 함");
+
+// w2는 대기 — 글쓰기 연습을 해야 진행된다
+gWr.sendStory("@rookie_writer", 0);
+assert.strictEqual(gWr.getState().dmStory["@rookie_writer"].node, "w2");
+assert.deepStrictEqual(gWr.storyChoices("@rookie_writer"), [], "w2는 대기");
+
+// 산책으로는 안 뜨고 글쓰기로만 뜬다
+var rWalk = gWr.advanceTurn("walk", false);
+assert.strictEqual(rWalk.triggeredEvents.indexOf("unsent_draft"), -1, "산책으로는 안 뜬다");
+var rWrite = gWr.advanceTurn("write", false);
+assert.ok(rWrite.triggeredEvents.indexOf("unsent_draft") !== -1, "글쓰기 중에 뜬다");
+
+// 뜯어보면 w4a(delay 2), 그냥 읽으면 w4b(즉시)
+var deepId = null;
+gWr.getActions().forEach(function (a) {
+  if (a.kind === "event" && a.label.indexOf("뜯어본다") !== -1) deepId = a.id;
+});
+gWr.advanceTurn(deepId, false);
+assert.strictEqual(gWr.getState().dmStory["@rookie_writer"].node, "w2", "delay 2라 예약만");
+gWr.advanceTurn("rest", false);
+gWr.advanceTurn("rest", false);
+assert.strictEqual(gWr.getState().dmStory["@rookie_writer"].node, "w4a", "2일 뒤 도착");
+
+// 끝 노드의 보상: 감각 +3. DM이 스탯을 주는 유일한 경우다(스토리 완주 보상).
+var gRw = writerGame();
+gRw.advanceTurn("rest", false);
+var senseBefore = gRw.getState().stats.감각;
+gRw._goStory("@rookie_writer", "w7");
+assert.strictEqual(gRw.getState().stats.감각, senseBefore + 3, "등단 굿즈로 감각 +3");
+assert.strictEqual(gRw.getState().dmStory["@rookie_writer"].done, true, "끝 노드라 done");
+
+// 30일 지연이 정확히 30일이다 — 지금까지 최장 3일이라 검증되지 않던 범위다
+var gLong = writerGame();
+gLong.advanceTurn("rest", false);
+gLong._goStory("@rookie_writer", "w6a");
+var dayBefore = gLong.getState().day;
+gLong.sendStory("@rookie_writer", 0);
+var pendW = gLong.getState().dmStory["@rookie_writer"].pending;
+assert.ok(pendW, "예약이 잡힌다");
+assert.strictEqual(pendW.day, dayBefore + 30, "예약일이 오늘+30");
+for (var dW = 0; dW < 29; dW++) gLong.advanceTurn("rest", false);
+assert.strictEqual(gLong.getState().dmStory["@rookie_writer"].node, "w6a", "29일째엔 아직");
+gLong.advanceTurn("rest", false);
+assert.strictEqual(gLong.getState().dmStory["@rookie_writer"].node, "w7", "30일째에 도착");
+
+// 두 스토리가 서로 간섭하지 않는다
+var gBoth = Engine.create(loadData());
+var sB = gBoth.getState();
+sB.npcSeen["@rookie_writer"] = 1;
+sB.npcSeen["@old_records"] = 1;
+gBoth.advanceTurn("rest", false);
+sB = gBoth.getState();
+sB.stats.글빨 = 17; sB.stats.감각 = 12;
+// 하루 반응 한도(dailyCap) 때문에 하루엔 못 채운다 — 이틀에 나눠 누른다
+var bw = sB.npcTweets["@rookie_writer"];
+for (var i2 = 0; i2 < 5; i2++) gBoth.toggleReaction(bw[i2].id, "like");
+gBoth.advanceTurn("rest", false);
+var bo = gBoth.getState().npcTweets["@old_records"];
+for (var j2 = 0; j2 < 5; j2++) gBoth.toggleReaction(bo[j2].id, "like");
+gBoth.advanceTurn("rest", false);
+var stB = gBoth.getState().dmStory;
+assert.ok(stB["@rookie_writer"] && stB["@old_records"], "두 스토리가 다 열린다");
+assert.strictEqual(stB["@rookie_writer"].node, "w1");
+assert.strictEqual(stB["@old_records"].node, "s1");
+
+console.log("쓰다가지움 스토리 OK");
+
+// --- 괴담계 결말 보상 ---
+// 결말이 둘이라 값도 다르다: 닫히는 끝은 대가 없이 감각 +2,
+// 열린 채 남는 끝은 감각 +3에 멘탈 -5 — 더 얻고 대가를 낸다(핵심 교환과 같은 구조).
+var gEndA = storyGame();
+gEndA.advanceTurn("rest", false);
+var ea0 = Object.assign({}, gEndA.getState().stats);
+gEndA._goStory("@old_records", "s7a");
+var ea1 = gEndA.getState().stats;
+assert.strictEqual(ea1.감각, ea0.감각 + 2, "닫히는 끝은 감각 +2");
+assert.strictEqual(ea1.멘탈, ea0.멘탈, "닫히는 끝은 대가가 없다");
+
+var gEndB = storyGame();
+gEndB.advanceTurn("rest", false);
+var eb0 = Object.assign({}, gEndB.getState().stats);
+gEndB._goStory("@old_records", "s7b");
+var eb1 = gEndB.getState().stats;
+assert.strictEqual(eb1.감각, eb0.감각 + 3, "열린 끝은 감각 +3");
+assert.strictEqual(eb1.멘탈, eb0.멘탈 - 5, "열린 끝은 멘탈 -5");
+
+// 멘탈이 모자랄 때도 0이 바닥이다 — reward도 clampStat을 지나야 한다
+var gEndLow = storyGame();
+gEndLow.advanceTurn("rest", false);
+gEndLow.getState().stats.멘탈 = 3;
+gEndLow._goStory("@old_records", "s7b");
+assert.strictEqual(gEndLow.getState().stats.멘탈, 0, "멘탈 3에서 -5면 0에서 멈춘다");
+
+// 보상은 한 번만 — 끝 노드는 done이라 다시 지나가지 않는다
+var senseAfter = gEndB.getState().stats.감각;
+assert.strictEqual(gEndB.sendStory("@old_records", 0), null, "끝난 뒤엔 sendStory가 막힌다");
+for (var tE = 0; tE < 10; tE++) gEndB.advanceTurn("rest", false);
+assert.strictEqual(gEndB.getState().stats.감각, senseAfter, "턴을 돌려도 보상이 다시 안 들어온다");
+
+console.log("괴담계 결말 보상 OK");
+
+// --- 광고 상품 구매 ---
+// 하루를 안 쓰고, 상품마다 한 번만 살 수 있고, 빚을 내서는 못 산다.
+var adsData = loadData().ads;
+assert.ok(adsData && adsData.items.length > 0, "광고 데이터가 있다");
+
+// 광고가 타임라인에 뜬다
+var gAd = Engine.create(loadData());
+var adSeen = null;
+for (var tA = 0; tA < 200 && !adSeen; tA++) {
+  gAd.advanceTurn("rest", false).feedItems.forEach(function (f) {
+    if (f.kind === "ad") adSeen = f;
+  });
+}
+assert.ok(adSeen, "광고가 타임라인에 뜬다");
+assert.ok(adSeen.adId && adSeen.price > 0 && adSeen.effects, "광고에 필요한 필드가 다 있다");
+assert.strictEqual(adSeen.author, adsData.handle, "광고 계정 핸들이 붙는다");
+
+// 돈이 모자라면 못 산다
+var gPoorAd = Engine.create(loadData());
+gPoorAd.getState().stats.돈 = 1000;
+var cheapest = adsData.items.reduce(function (a, b) { return b.price < a.price ? b : a; });
+assert.strictEqual(gPoorAd.canBuy(cheapest.id).reason, "money", "돈 부족이 이유로 나온다");
+assert.strictEqual(gPoorAd.buyItem(cheapest.id), null, "돈이 모자라면 못 산다");
+assert.strictEqual(gPoorAd.getState().stats.돈, 1000, "실패해도 돈이 안 빠진다");
+
+// 돈이 있으면 사고 스탯이 오른다
+var gBuy = Engine.create(loadData());
+gBuy.getState().stats.돈 = 9000000;
+var item0 = adsData.items[0];
+var beforeBuy = Object.assign({}, gBuy.getState().stats);
+var dayBuy = gBuy.getState().day;
+var boughtRes = gBuy.buyItem(item0.id);
+assert.ok(boughtRes, "구매 성공");
+assert.strictEqual(gBuy.getState().stats.돈, beforeBuy.돈 - item0.price, "가격만큼 빠진다");
+Object.keys(item0.effects).forEach(function (k) {
+  assert.strictEqual(gBuy.getState().stats[k], beforeBuy[k] + item0.effects[k],
+    k + "가 " + item0.effects[k] + "만큼 오른다");
+});
+assert.strictEqual(gBuy.getState().day, dayBuy, "구매는 하루를 안 쓴다");
+
+// 같은 상품을 두 번 못 산다
+var afterBuy = Object.assign({}, gBuy.getState().stats);
+assert.strictEqual(gBuy.buyItem(item0.id), null, "두 번째 구매는 막힌다");
+assert.deepStrictEqual(gBuy.getState().stats, afterBuy, "스탯도 돈도 안 변한다");
+assert.strictEqual(gBuy.canBuy(item0.id).reason, "bought", "이미 샀다고 알려준다");
+
+// 빚을 내서는 못 산다 — 돈은 음수를 허용하는 스탯이지만 광고는 여윳돈으로 사는 물건이다
+var gDebtAd = Engine.create(loadData());
+gDebtAd.getState().stats.돈 = -50000;
+assert.strictEqual(gDebtAd.buyItem(item0.id), null, "돈이 마이너스면 못 산다");
+
+// 전부 사면 광고가 안 뜬다
+var gAllAd = Engine.create(loadData());
+gAllAd.getState().stats.돈 = 99999999;
+adsData.items.forEach(function (it) { gAllAd.buyItem(it.id); });
+var adsAfterAll = 0;
+for (var tB = 0; tB < 100; tB++) {
+  gAllAd.advanceTurn("rest", false).feedItems.forEach(function (f) {
+    if (f.kind === "ad") adsAfterAll++;
+  });
+}
+assert.strictEqual(adsAfterAll, 0, "살 게 없으면 광고가 안 뜬다");
+
+// 모르는 입력은 null
+assert.strictEqual(gBuy.buyItem("없는물건"), null);
+assert.strictEqual(gBuy.buyItem(null), null);
+assert.strictEqual(gBuy.canBuy("없는물건").reason, "unknown");
+
+// 옛 세이브에 bought가 없어도 동작한다
+var savedNoBought = JSON.parse(JSON.stringify(gBuy.getState()));
+delete savedNoBought.bought;
+var gOldAd = Engine.create(loadData(), savedNoBought);
+assert.ok(gOldAd.getState().bought, "bought가 채워진다");
+
+console.log("광고 상품 OK");

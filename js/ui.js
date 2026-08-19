@@ -32,10 +32,19 @@
     "논란성": { icon: "flame", tone: "hot" }
   };
 
+  // 트윗 속성 → 스탯. data/npcs.js의 reaction.attrStat과 같은 값이다
+  // (ui.js는 표기만 담당하고 규칙은 엔진에 있다).
+  var ATTR_STAT = { humor: "유머", info: "글빨", daily: "감각", bait: "논란성" };
+
+  // 게이지 칸 수. data/npcs.js의 reaction.perPoint와 같아야 한다(표기용 복제).
+  var GAIN_MAX = 5;
+
   // 실제 트위터처럼 답글은 홈 타임라인에 안 뜬다 — 알림에서 보거나 트윗 상세로 들어가야 한다
   // 정산은 주 1회뿐이고 이 게임의 심장이라 타임라인·알림 양쪽에 남긴다
   // npc = 팔로잉 계정들의 전용 트윗. 타임라인에만 흐르고 알림엔 안 뜬다(남의 트윗이니까)
-  var TIMELINE_KINDS = ["me", "npc", "event", "system", "settlement"];
+  // 정산은 타임라인에 없다 — 실제 X도 수익 정산을 타임라인에 띄우지 않는다.
+  // 주급날 팝업으로 보고, 기록은 알림에 남는다(NOTIF_KINDS에는 그대로 있다).
+  var TIMELINE_KINDS = ["me", "npc", "event", "system", "ad"];
   var NOTIF_KINDS = ["like", "retweet", "follow", "reply", "event", "system", "settlement"];
 
   function notifItemsOf(state) {
@@ -140,6 +149,18 @@
       reactBtn(item.id, "like", "heart", item.likes, r.like) + "</div>";
   }
 
+  // 남의 트윗 우상단 속성 배지. 내 트윗·답글·이벤트엔 붙지 않는다(NPC 트윗만 반응 대상).
+  // 이미 센 트윗(gained)은 반투명 — 정보는 남으면서 아직 얻을 게 있는 트윗이 눈에 띈다.
+  function attrBadge(item) {
+    if (item.kind !== "npc" || !item.attr) return "";
+    var stat = ATTR_STAT[item.attr];
+    if (!stat) return "";
+    var style = STAT_STYLE[stat] || { icon: "trending-up", tone: "ink" };
+    var done = (reactedNow[item.id] || {}).gained ? " done" : "";
+    return '<span class="attr-badge tone-' + style.tone + done + '" title="' + stat + '">' +
+      Icons.svg(style.icon) + "</span>";
+  }
+
   function tweetEl(item, opts) {
     opts = opts || {};
     var div = document.createElement("div");
@@ -160,11 +181,16 @@
     var metrics = item.kind === "me"
       ? metricEl("heart", item.likes) + metricEl("repeat-2", item.rts) + metricEl("chart-column", item.views)
       : "";
+    // 속성 배지: 무엇이 오를지 누르기 전에 보인다.
+    // 날짜는 이름·핸들 옆에 둔다(실제 X 구조). .meta에는 내 트윗의 수치만 남는다.
     div.innerHTML =
       '<div class="avatar"' + avatarAttr(item) + ">" + avatarInner(item) + "</div>" +
-      '<div class="body">' + rtLabel + '<span class="who"></span> <span class="handle"></span>' +
-      '<div class="text"></div><div class="meta"><span>' + shortDate(item.day) + "</span>" + metrics +
-      "</div>" + reactRow(item) + "</div>";
+      '<div class="body">' + rtLabel + attrBadge(item) +
+      '<span class="who"></span> <span class="handle"></span>' +
+      '<span class="stamp">· ' + shortDate(item.day) + "</span>" +
+      '<div class="text"></div>' +
+      (metrics ? '<div class="meta">' + metrics + "</div>" : "") +
+      reactRow(item) + "</div>";
     div.querySelector(".who").textContent = who;
     div.querySelector(".handle").textContent = handle;
     div.querySelector(".text").textContent = item.text;
@@ -238,8 +264,41 @@
     });
   }
 
+  // 광고 카드. 실제 X의 프로모션 게시물처럼 "광고" 라벨이 붙고 구매 버튼이 달린다.
+  // 살 수 없으면 버튼이 비활성이고 이유가 보인다 — 살 수 있는 것만 띄우면
+  // "나중에 사야지"가 안 되고, 비활성 버튼 자체가 목표가 된다.
+  function adEl(item) {
+    var div = document.createElement("div");
+    div.className = "tweet ad";
+    var state = gameNow ? gameNow.canBuy(item.adId) : { ok: false, reason: "unknown" };
+    var label = state.reason === "bought" ? "구매함"
+      : state.reason === "money" ? "돈이 부족합니다" : "구매";
+
+    div.innerHTML =
+      // 광고 계정은 NPC 목록에 없어서 프로필이 없다 — data-account를 안 붙인다.
+      // 붙이면 눌렀을 때 빈 프로필이 열린다.
+      '<div class="avatar">' + pfp(item.author) + "</div>" +
+      '<div class="body">' +
+      '<span class="who"></span> <span class="handle"></span>' +
+      '<span class="ad-tag">광고</span>' +
+      '<div class="text"></div>' +
+      '<div class="ad-buy">' +
+      '<span class="ad-name"></span><span class="ad-price"></span>' +
+      '<button class="buy-btn" data-buy="' + item.adId + '"' +
+      (state.ok ? "" : " disabled") + "></button>" +
+      "</div></div>";
+    div.querySelector(".who").textContent = item.name || item.author;
+    div.querySelector(".handle").textContent = item.author;
+    div.querySelector(".text").textContent = item.text;
+    div.querySelector(".ad-name").textContent = item.label;
+    div.querySelector(".ad-price").textContent = statValue("돈", item.price);
+    div.querySelector(".buy-btn").textContent = label;
+    return div;
+  }
+
   function feedItemEl(item) {
     if (item.kind === "settlement") return settlementEl(item);
+    if (item.kind === "ad") return adEl(item);
     return REACTIONS[item.kind] ? reactionEl(item) : tweetEl(item);
   }
 
@@ -338,9 +397,32 @@
   }
 
   // 홈 타임라인 탭. 추천 = 내 타임라인 전부, 팔로우 중 = 팔로우한 계정이 쓴 글만.
-  // (내 트윗·이벤트·정산 카드를 빼고 남의 글만 읽고 싶을 때 쓰는 필터다)
+  // (내 트윗·이벤트를 빼고 남의 글만 읽고 싶을 때 쓰는 필터다)
   var homeTab = "all";
-  function setHomeTab(name) {
+
+  // 추천 탭의 섞인 순서. 실제 X처럼 시간순이 아니라 알고리즘 순으로 보이게 한다.
+  // 순서를 기억해두는 이유: 매 렌더마다 다시 섞으면 좋아요 하나만 눌러도 타임라인이
+  // 통째로 재배열돼 읽던 자리를 잃는다. 탭을 누를 때만 새로 섞는다(= 새로고침).
+  // 항목 id를 키로 순위를 매긴다 — 새 트윗은 id가 없으니 맨 위(시간순)로 간다.
+  var shuffleRank = null;
+
+  function reshuffle(state) {
+    shuffleRank = {};
+    var ids = [];
+    (state.feed || []).forEach(function (f) { if (f.id) ids.push(f.id); });
+    (state.tweetLog || []).forEach(function (t) { if (t.id) ids.push(t.id); });
+    // Fisher-Yates. 엔진의 rand가 아니라 Math.random을 쓴다 —
+    // 이건 표시 순서일 뿐이라 세이브에 남지 않고 회귀 테스트도 걸지 않는다.
+    for (var i = ids.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var t = ids[i]; ids[i] = ids[j]; ids[j] = t;
+    }
+    ids.forEach(function (id, i) { shuffleRank[id] = i; });
+  }
+
+  function setHomeTab(name, state) {
+    // 추천 탭을 (다시) 누르면 새로 섞는다. 실제 X도 새로고침해야 순서가 바뀐다.
+    if (name === "all" && state) reshuffle(state);
     homeTab = name;
     document.querySelectorAll(".home-tab").forEach(function (b) {
       b.classList.toggle("active", b.dataset.htab === name);
@@ -514,6 +596,11 @@
   function renderDm(state) {
     var accounts = gameNow ? gameNow.dmAccounts() : [];
     var rooms = state.dms || {};
+    // 스토리가 시작된 계정도 대화방이 있다. dmAccounts()는 accounts(선택지 풀)만 세므로
+    // state.dms에 방이 있는 계정을 합친다 — 스토리 계정은 goStory가 방을 만든다.
+    Object.keys(rooms).forEach(function (h) {
+      if (accounts.indexOf(h) === -1) accounts.push(h);
+    });
     var room = function (h) { return rooms[h] || { msgs: [], seen: 0 }; };
     var inRoom = dmHandle && accounts.indexOf(dmHandle) !== -1;
 
@@ -561,8 +648,18 @@
     // 자유 입력이 아니라 고를 말이다. 어느 말이 남았는지는 엔진이 안다.
     var ch = $("dm-choices");
     ch.innerHTML = "";
-    var choices = gameNow ? gameNow.getDmChoices(dmHandle) : [];
+    // 스토리 계정이면 스토리 선택지를, 아니면 기존 선택지 풀을 쓴다.
+    // 대기 중(행동을 기다리는 중)이면 스토리 쪽이 빈 배열을 주고, 그러면 아무것도 안 그린다 —
+    // "기다리는 중" 같은 표시를 넣지 말 것. 침묵이 이 이야기의 연출이다.
+    // 스토리 계정인지는 엔진에 묻는다. "선택지가 비었는가"로 가르면 안 된다 —
+    // 대기·지연 중에도 빈 배열이라, 그걸로 판단하면 기존 getDmChoices로 넘어가서
+    // accounts에 없는 스토리 계정에서 터진다(실제로 겪음).
+    var isStory = !!(gameNow && gameNow.isStoryAccount(dmHandle));
+    var choices = !gameNow ? []
+      : (isStory ? gameNow.storyChoices(dmHandle) : gameNow.getDmChoices(dmHandle));
     if (!choices.length) {
+      // 스토리가 대기·지연 중일 때는 이 침묵 자체가 연출이다 — "더 할 말이…" 문구를 넣지 않는다.
+      if (isStory || (gameNow && gameNow.dmAccounts().indexOf(dmHandle) === -1)) return;
       var done = document.createElement("p");
       done.className = "dm-done";
       done.textContent = "더 할 말이 떠오르지 않는다.";
@@ -572,8 +669,11 @@
     choices.forEach(function (c) {
       var b = document.createElement("button");
       b.className = "dm-say";
-      b.dataset.dmSay = c.idx;
+      // 스토리 선택은 dmSay 대신 storyIdx를 단다 — 기존 sendDm 핸들러로 새면 안 된다
+      if (isStory) b.dataset.storyIdx = c.idx;
+      else b.dataset.dmSay = c.idx;
       b.dataset.dmTo = dmHandle;
+      // 두 목록 다 { idx, label }이다 — 엔진이 형식을 맞춰준다
       b.textContent = c.label;
       ch.appendChild(b);
     });
@@ -705,7 +805,9 @@
     var fbtn = $("profile-follow");
     fbtn.classList.toggle("hidden", !npc);
     // 쪽지는 말을 튼 계정에만 — 전 계정에 열면 대사가 448개 트윗만큼 필요하다
-    var canDm = !!npc && gameNow && gameNow.dmAccounts().indexOf(handle) !== -1;
+    // 스토리가 시작된 계정도 방이 있다 — state.dms에 방이 생겼으면 들어갈 수 있다
+    var canDm = !!npc && gameNow &&
+      (gameNow.dmAccounts().indexOf(handle) !== -1 || !!(state.dms || {})[handle]);
     $("profile-dm").classList.toggle("hidden", !canDm);
     if (canDm) $("profile-dm").dataset.dm = handle;
     if (npc) {
@@ -757,6 +859,41 @@
         : (npc ? "내 트윗에 답글을 단 적이 없습니다." : "아직 받은 답글이 없습니다."));
   }
 
+  // 반응 게이지 토스트. 누른 자리 근처에 떠서 5칸 중 몇 칸이 찼는지 보여준다.
+  // 게이지를 상시로 두면 화면이 지저분하고, 없으면 진행이 안 보인다 — 누른 순간에만.
+  var gainTimer = null;
+
+  function showGain(gain, x, y) {
+    if (!gain) return; // 이미 센 트윗은 아무 일도 안 일어났으니 띄우지 않는다
+    var el = $("gain-toast");
+    var style = STAT_STYLE[gain.stat] || { icon: "trending-up", tone: "ink" };
+    // leveled면 게이지가 꽉 찬 상태로 보여준다 — count는 이미 0으로 돌아갔다
+    var filled = gain.leveled ? GAIN_MAX : gain.count;
+    var cells = "";
+    for (var i = 0; i < GAIN_MAX; i++)
+      cells += '<span class="cell' + (i < filled ? " on" : "") + '"></span>';
+    // hidden 클래스를 className 조립에 포함시켜야 한다 — 통째로 덮어쓰므로
+    // classList.remove만 따로 하면 다음 렌더에서 다시 사라진다.
+    el.className = "gain-toast tone-" + style.tone + (gain.leveled ? " leveled" : "");
+    el.innerHTML = Icons.svg(style.icon) +
+      '<span class="gain-bar">' + cells + "</span>" +
+      '<span class="gain-label">' + gain.stat + (gain.leveled ? " +1" : "") + "</span>";
+
+    // 위치는 클릭 지점 근처. 화면 밖으로 나가지 않게 안쪽으로 밀어 넣는다.
+    // className에서 hidden을 뗀 뒤에(위에서 이미 했다) 재야 offsetWidth가 0이 아니다.
+    var pad = 8, w = el.offsetWidth, h = el.offsetHeight;
+    var left = Math.min(Math.max(pad, x - w / 2), window.innerWidth - w - pad);
+    var top = y - h - 12;
+    if (top < pad) top = y + 20; // 위가 좁으면 아래로 편다
+    el.style.left = left + "px";
+    el.style.top = top + "px";
+
+    // 연타하면 새로 만들지 않고 이 하나를 옮긴다 — 여러 장이 쌓이면 화면을 덮는다.
+    if (gainTimer) clearTimeout(gainTimer);
+    gainTimer = setTimeout(function () { el.classList.add("hidden"); },
+      gain.leveled ? 1600 : 1000); // 스탯이 오른 순간은 조금 더 머문다
+  }
+
   function renderAll(state, game) {
     gameNow = game || gameNow;
     reactedNow = state.reacted || {}; // 이 렌더 동안 tweetEl이 참조한다
@@ -777,8 +914,17 @@
       .concat(mine)
       .sort(function (a, b) { return sortDay(b) - sortDay(a); });
     if (homeTab === "following") {
-      // 팔로우한 계정이 쓴 글만 — 내 트윗·이벤트·정산은 뺀다. 내 리트윗은 남의 글이라 남긴다.
+      // 팔로우한 계정이 쓴 글만 — 내 트윗·이벤트는 뺀다. 내 리트윗은 남의 글이라 남긴다.
       timeline = timeline.filter(function (f) { return f.kind === "npc"; });
+    } else if (shuffleRank) {
+      // 추천 탭은 실제 X처럼 시간순이 아니다. 탭을 누를 때 정한 순서를 그대로 쓴다 —
+      // 매 렌더마다 다시 섞으면 좋아요 하나에도 타임라인이 재배열된다.
+      // 순위가 없는 항목(그 뒤에 생긴 새 트윗)은 맨 위로 — 방금 올린 글이 안 보이면 안 된다.
+      timeline = timeline.slice().sort(function (a, b) {
+        var ra = a.id && shuffleRank[a.id] != null ? shuffleRank[a.id] : -1;
+        var rb = b.id && shuffleRank[b.id] != null ? shuffleRank[b.id] : -1;
+        return ra - rb;
+      });
     }
     renderFeed($("feed"), timeline,
       homeTab === "following"
@@ -826,19 +972,62 @@
     }).join("  ");
   }
 
+  // 행동 카드의 아이콘. 그 행동이 올리는 스탯과 같은 아이콘을 쓴다 —
+  // 스탯 패널과 맞춰두면 무엇이 오르는지가 아이콘만으로 읽힌다(속성 배지와 같은 원리).
+  var ACTION_ICON = {
+    daily: "calendar", write: "feather", meme: "laugh", trend: "trending-up",
+    archive: "book-open", beef_watch: "flame", rest: "battery-medium",
+    walk: "footprints", parttime: "wallet", sponsor: "wallet", promo: "user-plus"
+  };
+
+  // 효과를 칩 하나씩으로 쪼갠다. 한 줄 문자열로 뭉치면 뭐가 오르고 뭐가 내리는지 안 읽힌다.
+  function effectChips(effects) {
+    return Object.keys(effects || {}).map(function (k) {
+      var v = effects[k];
+      var style = STAT_STYLE[k] || { icon: "trending-up", tone: "ink" };
+      var sign = v >= 0 ? "+" : "-";
+      var chip = document.createElement("span");
+      chip.className = "chip tone-" + style.tone + (v < 0 ? " down" : "");
+      chip.innerHTML = Icons.svg(style.icon) + "<b></b>";
+      chip.querySelector("b").textContent = sign + statValue(k, Math.abs(v));
+      chip.title = k;
+      return chip;
+    });
+  }
+
   function showActions(actions, onPick) {
     var list = $("action-list");
     list.innerHTML = "";
     actions.forEach(function (a) {
-      var item = document.createElement("div");
-      item.className = "action-item" + (a.kind === "event" ? " event" : "");
-      var right = a.kind === "event"
-        ? Icons.svg("zap") + "이벤트 대응"
-        : effectsText(a.effects) || "—";
-      item.innerHTML = '<span class="label"></span><span class="kind">' + right + "</span>";
-      item.querySelector(".label").textContent = a.label;
-      item.onclick = function () { onPick(a.id); };
-      list.appendChild(item);
+      var card = document.createElement("button");
+      card.type = "button";
+      card.className = "action-card" + (a.kind === "event" ? " event" : "");
+
+      var icon = a.kind === "event" ? "zap" : (ACTION_ICON[a.id] || "calendar");
+      card.innerHTML =
+        '<span class="a-icon">' + Icons.svg(icon) + "</span>" +
+        '<span class="a-body"><span class="a-label"></span>' +
+        '<span class="a-chips"></span></span>';
+      card.querySelector(".a-label").textContent = a.label;
+
+      var chips = card.querySelector(".a-chips");
+      if (a.kind === "event") {
+        var tag = document.createElement("span");
+        tag.className = "chip event-chip";
+        tag.textContent = "이벤트 대응";
+        chips.appendChild(tag);
+      } else {
+        var made = effectChips(a.effects);
+        if (!made.length) {
+          var none = document.createElement("span");
+          none.className = "chip none";
+          none.textContent = "변화 없음";
+          chips.appendChild(none);
+        } else made.forEach(function (c) { chips.appendChild(c); });
+      }
+
+      card.onclick = function () { onPick(a.id); };
+      list.appendChild(card);
     });
     $("compose-modal").classList.remove("hidden");
   }
@@ -945,6 +1134,7 @@
     openSearch: openSearch, closeSearch: closeSearch,
     setSearchQuery: setSearchQuery, setSearchTab: setSearchTab,
     openDm: openDm, dmBack: dmBack, dmOpenHandle: dmOpenHandle,
-    openFollowing: openFollowing, closeFollowing: closeFollowing };
+    openFollowing: openFollowing, closeFollowing: closeFollowing,
+    showGain: showGain };
 })();
 if (typeof module !== "undefined") module.exports = UI;

@@ -128,10 +128,13 @@
     }
     var rtDo = e.target.closest("[data-rt-do]");
     if (rtDo) {
-      game.toggleReaction(rtDo.dataset.rtId, "rt");
+      var rtRes = game.toggleReaction(rtDo.dataset.rtId, "rt");
       UI.closeRtMenu();
       save(game.getState());
       refresh();
+      // 렌더 뒤에 띄운다 — 토스트는 피드 바깥(#gain-toast)이라 지워지진 않지만
+      // 배지의 흐려짐과 순서를 맞춘다.
+      if (rtRes) UI.showGain(rtRes.gain, e.clientX, e.clientY);
       return;
     }
     // 메뉴 밖을 눌렀으면 닫는다. 그 클릭의 원래 동작(상세 이동 등)은 이어서 처리한다.
@@ -139,6 +142,15 @@
 
     // 쪽지: 대화방 열기(목록 행·프로필 버튼)와 말 걸기.
     // 방을 열면 읽은 것으로 처리한다 — 알림과 같은 규칙이다.
+    // 스토리 선택. 기존 dm-say와 같은 data-dm-to를 쓰지만 속성이 달라 서로 안 겹친다.
+    // 하루를 안 쓰므로 resolveTurn을 거치지 않는다(기존 DM과 같다).
+    var storyBtn = e.target.closest("[data-story-idx]");
+    if (storyBtn) {
+      game.sendStory(storyBtn.dataset.dmTo, Number(storyBtn.dataset.storyIdx));
+      save(game.getState());
+      refresh();
+      return;
+    }
     var dmSay = e.target.closest("[data-dm-say]");
     if (dmSay) {
       game.sendDm(dmSay.dataset.dmTo, Number(dmSay.dataset.dmSay));
@@ -164,11 +176,23 @@
       refresh();
       return;
     }
+    // 광고 구매. 버튼이 트윗 안에 있으므로 트윗 상세보다 먼저 잡아야 한다
+    // (반응 버튼·아바타와 같은 함정). 하루를 안 쓰므로 resolveTurn을 거치지 않는다.
+    var buyBtn = e.target.closest("[data-buy]");
+    if (buyBtn) {
+      var bought = game.buyItem(buyBtn.dataset.buy);
+      if (bought) {
+        save(game.getState());
+        refresh();
+      }
+      return;
+    }
     var react = e.target.closest("[data-react]");
     if (react) {
-      game.toggleReaction(react.dataset.reactId, react.dataset.react);
+      var res = game.toggleReaction(react.dataset.reactId, react.dataset.react);
       save(game.getState());
       refresh();
+      if (res) UI.showGain(res.gain, e.clientX, e.clientY);
       return;
     }
     var account = e.target.closest("[data-account]");
@@ -195,8 +219,12 @@
   });
 
   // 홈 타임라인 탭 (추천 / 팔로우 중)
+  // 추천 탭은 누를 때마다 순서를 새로 섞는다(실제 X의 새로고침) — state가 필요하다.
   document.querySelectorAll(".home-tab").forEach(function (btn) {
-    btn.onclick = function () { UI.setHomeTab(btn.dataset.htab); refresh(); };
+    btn.onclick = function () {
+      UI.setHomeTab(btn.dataset.htab, game.getState());
+      refresh();
+    };
   });
 
   // ── 검색 ──

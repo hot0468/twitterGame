@@ -74,12 +74,12 @@ body { background: var(--bg); color: var(--text); font-size: var(--fs-sm);
 /* 스탯 아이콘은 글씨보다 크게 — 1.35em이면 12px 글씨에서 형태가 안 읽힌다 */
 .stat-name .icon { width: 1.4rem; height: 1.4rem; }
 .stat-row b { color: var(--text); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
-.stat-row.tone-ink .icon { color: #1d9bf0; }
-.stat-row.tone-warm .icon { color: #e8a020; }
-.stat-row.tone-violet .icon { color: #8b5cf6; }
-.stat-row.tone-calm .icon { color: #12a594; }
-.stat-row.tone-money .icon { color: #15883f; }
-.stat-row.tone-hot .icon { color: #e5484d; }
+.stat-row.tone-ink .icon, .attr-badge.tone-ink, .gain-toast.tone-ink { color: #1d9bf0; }
+.stat-row.tone-warm .icon, .attr-badge.tone-warm, .gain-toast.tone-warm { color: #e8a020; }
+.stat-row.tone-violet .icon, .attr-badge.tone-violet, .gain-toast.tone-violet { color: #8b5cf6; }
+.stat-row.tone-calm .icon, .attr-badge.tone-calm, .gain-toast.tone-calm { color: #12a594; }
+.stat-row.tone-money .icon, .attr-badge.tone-money, .gain-toast.tone-money { color: #15883f; }
+.stat-row.tone-hot .icon, .attr-badge.tone-hot, .gain-toast.tone-hot { color: #e5484d; }
 /* 마이너스 통장 — 게임 오버는 아니지만 갚아야 할 빚이라 눈에 띄게 */
 .stat-row.negative b, .stat-row.negative .icon { color: #e5484d; }
 
@@ -133,14 +133,34 @@ body { background: var(--bg); color: var(--text); font-size: var(--fs-sm);
 .avatar[data-account]:hover { opacity: 0.82; }
 .avatar .icon { width: 1.7rem; height: 1.7rem; }
 
-.action-list { max-height: 52vh; overflow-y: auto; }
-.action-item { padding: 10px 14px; cursor: pointer; display: flex;
-  justify-content: space-between; align-items: center; gap: 12px; }
-.action-item:hover { background: var(--hover); }
-.action-item .kind { display: flex; align-items: center; gap: 5px;
-  color: var(--muted); font-size: var(--fs-xs); flex-shrink: 0; }
-.action-item.event { color: var(--accent); font-weight: 700; }
-.action-item.event .kind { color: var(--accent); }
+/* 행동 선택 카드. 한 줄 목록이었을 땐 효과가 한 덩어리 문자열이라 안 읽혔다 —
+   카드마다 아이콘 + 이름 + 효과 칩으로 쪼개서 훑어보고 고를 수 있게 한다. */
+.action-list { max-height: 52vh; overflow-y: auto; padding: 10px 12px;
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.action-card { display: flex; align-items: flex-start; gap: 9px; width: 100%;
+  padding: 11px 12px; border: 1px solid var(--line); border-radius: 14px;
+  background: var(--bg); cursor: pointer; text-align: left; font: inherit;
+  color: inherit; transition: background .12s, border-color .12s; }
+.action-card:hover { background: var(--hover); border-color: var(--accent); }
+.action-card .a-icon { display: flex; color: var(--muted); flex-shrink: 0; padding-top: 1px; }
+.action-card .a-icon .icon { width: 1.25rem; }
+.action-card:hover .a-icon { color: var(--accent); }
+.action-card .a-body { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.action-card .a-label { font-size: var(--fs-base); font-weight: 700; }
+.action-card .a-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+
+/* 효과 칩. 스탯 색(tone)을 그대로 물려받아 무엇이 오르는지 색으로도 읽힌다 */
+.action-card .chip { display: inline-flex; align-items: center; gap: 3px;
+  font-size: var(--fs-xs); color: var(--muted); }
+.action-card .chip .icon { width: 0.95rem; }
+.action-card .chip.down { opacity: 0.75; }
+.action-card .chip.none { color: var(--muted); opacity: 0.6; }
+.action-card .chip.event-chip { color: var(--accent); font-weight: 700; }
+
+/* 이벤트 대응은 오늘 해야 하는 일이라 눈에 띄어야 한다 — 두 칸을 다 쓴다 */
+.action-card.event { grid-column: 1 / -1; border-color: var(--accent); }
+.action-card.event .a-icon { color: var(--accent); }
+.action-card.event .a-label { color: var(--accent); }
 
 /* 홈 타임라인의 추천/팔로우 중 탭. 상단바 바로 아래 붙어 스크롤해도 남는다 */
 .home-tabs { position: sticky; top: 2.9rem; z-index: 4;
@@ -148,13 +168,26 @@ body { background: var(--bg); color: var(--text); font-size: var(--fs-sm);
 
 /* ── 트윗 ────────────────────────────────────── */
 .tweet { display: flex; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border); }
-.tweet .body { min-width: 0; flex: 1; }
+.tweet .body { position: relative; min-width: 0; flex: 1; }
 .tweet .who { font-weight: 700; }
 .tweet .handle { color: var(--muted); font-size: var(--fs-xs); }
+/* 이름·핸들 옆 날짜 (실제 X 구조) */
+.tweet .stamp { color: var(--muted); font-size: var(--fs-sm); }
 .tweet .text { margin: 2px 0 5px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
 .tweet .meta { display: flex; align-items: center; gap: 16px;
   color: var(--muted); font-size: var(--fs-xs); }
 .tweet .metric { display: flex; align-items: center; gap: 5px; }
+
+/* 트윗 우상단 속성 배지. 무엇이 오를지 누르기 전에 보여준다. */
+.attr-badge {
+  position: absolute; top: 0; right: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1.5rem; height: 1.5rem;
+  opacity: 0.85;
+}
+.attr-badge .icon { width: 1rem; }
+/* 이미 스탯을 준 트윗은 흐리게 — 아직 얻을 게 있는 트윗이 눈에 띈다 */
+.attr-badge.done { opacity: 0.25; }
 
 /* 남의 트윗의 리트윗·좋아요 버튼. 하루를 소모하지 않는 조작이라 컴포즈와 무관하다 */
 .actions { display: flex; gap: 18px; margin-top: 6px; }
@@ -469,7 +502,8 @@ body { background: var(--bg); color: var(--text); font-size: var(--fs-sm);
   /* 팝업은 화면 폭을 거의 다 쓴다 (데스크톱의 max-width 상한을 푼다) */
   .overlay { padding: 14px; align-items: flex-end; }
   .overlay .card { max-width: none; }
-  .action-list { max-height: 60vh; }
+  /* 좁은 화면에선 2열이면 이름이 뭉개진다 — 한 줄에 하나씩 */
+  .action-list { max-height: 60vh; grid-template-columns: 1fr; }
 
   /* 스탯 → 독바의 스탯 버튼을 누르면 뜨는 팝오버 (독바 위에 카드로) */
   .stats-panel { display: none; }
@@ -483,3 +517,44 @@ body { background: var(--bg); color: var(--text); font-size: var(--fs-sm);
 
   .profile-banner { height: 8rem; }
 }
+
+/* 반응 게이지 토스트. 누른 자리 근처에 잠깐 떴다 사라진다. */
+.gain-toast {
+  position: fixed; z-index: 60;
+  display: flex; align-items: center; gap: 0.4rem;
+  padding: 0.35rem 0.6rem; border-radius: 999px;
+  background: var(--bg); border: 1px solid var(--line);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+  font-size: var(--fs-xs); white-space: nowrap;
+  pointer-events: none;
+}
+.gain-toast .icon { width: 1.1rem; }
+.gain-bar { display: inline-flex; gap: 0.15rem; }
+.gain-bar .cell {
+  width: 0.7rem; height: 0.3rem; border-radius: 999px;
+  background: var(--line);
+}
+.gain-bar .cell.on { background: currentColor; }
+.gain-label { color: var(--muted); }
+
+/* 5칸이 다 차면 터진다 */
+.gain-toast.leveled { animation: gain-pop 0.4s ease-out; }
+.gain-toast.leveled .gain-label { color: currentColor; font-weight: 700; }
+@keyframes gain-pop {
+  0% { transform: scale(0.8); }
+  45% { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+
+/* 광고 카드. 실제 X의 프로모션 게시물처럼 "광고" 라벨이 붙는다. */
+.tweet.ad .ad-tag { color: var(--muted); font-size: var(--fs-xs); }
+.ad-buy { display: flex; align-items: center; gap: 8px; margin-top: 9px;
+  padding: 9px 11px; border: 1px solid var(--line); border-radius: 12px; }
+.ad-name { font-weight: 700; font-size: var(--fs-sm); }
+.ad-price { color: var(--muted); font-size: var(--fs-xs); margin-right: auto; }
+.buy-btn { padding: 7px 15px; border: none; border-radius: 999px;
+  background: var(--accent); color: #fff; font-family: inherit;
+  font-size: var(--fs-xs); font-weight: 700; cursor: pointer; white-space: nowrap; }
+.buy-btn:hover:not(:disabled) { background: var(--accent-dark); }
+/* 못 사는 이유(돈 부족·이미 삼)가 버튼 글자에 그대로 나온다 */
+.buy-btn:disabled { background: var(--border); color: var(--muted); cursor: default; }

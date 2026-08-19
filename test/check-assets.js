@@ -6,11 +6,40 @@ var path = require("path");
 
 var root = path.join(__dirname, "..");
 var dir = path.join(root, "assets", "avatars");
-var data = require(path.join(root, "data", "npcs.js"));
+// 데이터 파일마다 자기 GAME_DATA를 export하므로(브라우저에선 전역을 공유하지만
+// Node의 require에선 모듈마다 독립이다) 합쳐서 써야 한다 — 다른 테스트들과 같은 방식이다.
+var data = {};
+Object.assign(data, require(path.join(root, "data", "npcs.js")));
+Object.assign(data, require(path.join(root, "data", "ads.js")));   // 광고 계정도 아바타를 쓴다
 var npcs = data.npcs;
 var gen = data.timeline.gen;
 
 function has(name) { return fs.existsSync(path.join(dir, name + ".svg")); }
+
+// ── ui.js가 표기용으로 복제한 GAIN_MAX/ATTR_STAT가 data/npcs.js의 reaction과 맞는지 ──
+// js/ui.js는 DOM 없이 require는 되지만 GAIN_MAX·ATTR_STAT는 export되지 않는 클로저 변수라
+// (check-css.js가 이미 쓰는 관례대로) 소스를 텍스트로 읽어 값을 뽑아 대조한다.
+// 한쪽만 바꾸면 게이지 칸 수나 배지 색이 조용히 어긋나므로 테스트로 묶어둔다.
+var uiSrc = fs.readFileSync(path.join(root, "js", "ui.js"), "utf8");
+
+var gainMaxMatch = /GAIN_MAX\s*=\s*(\d+)/.exec(uiSrc);
+assert.ok(gainMaxMatch, "js/ui.js에서 GAIN_MAX를 못 찾았다");
+assert.strictEqual(Number(gainMaxMatch[1]), data.reaction.perPoint,
+  "ui.js의 GAIN_MAX(" + gainMaxMatch[1] + ")가 data/npcs.js의 reaction.perPoint(" +
+  data.reaction.perPoint + ")와 다르다 — 게이지 칸 수가 어긋난다");
+
+var attrStatMatch = /ATTR_STAT\s*=\s*\{([^}]*)\}/.exec(uiSrc);
+assert.ok(attrStatMatch, "js/ui.js에서 ATTR_STAT을 못 찾았다");
+var uiAttrStat = {};
+attrStatMatch[1].split(",").forEach(function (pair) {
+  var m = /"?(\w+)"?\s*:\s*"([^"]+)"/.exec(pair);
+  if (m) uiAttrStat[m[1]] = m[2];
+});
+assert.deepStrictEqual(uiAttrStat, data.reaction.attrStat,
+  "ui.js의 ATTR_STAT이 data/npcs.js의 reaction.attrStat과 다르다 — 배지 색이 어긋난다");
+
+// 트윗 항목은 문자열이거나 { t: 본문, a: 속성 } 객체다
+function tweetText(raw) { return typeof raw === "string" ? raw : raw.t; }
 
 // ── 프로필 사진 ──
 assert.ok(has("me"), "me.svg가 없다 — 내 아바타가 전부 깨진다");
@@ -20,8 +49,17 @@ assert.strictEqual(missing.length, 0,
   "아바타 없는 계정: " + missing.map(function (n) { return n.handle; }).join(", ") +
   "\n  assets/avatars/README.md의 curl 한 줄로 받으면 된다");
 
+// 광고 계정은 NPC 목록에 없지만 아바타는 쓴다 — 타임라인의 광고 카드에 뜬다.
+// (data/ads.js를 따로 두는 이유는 CLAUDE.md "광고 상품" 참고)
+var adHandle = data.ads && data.ads.handle && data.ads.handle.replace("@", "");
+if (adHandle) {
+  assert.ok(has(adHandle),
+    "광고 계정 아바타가 없다: " + adHandle + ".svg — 광고 카드의 사진이 깨진다");
+}
+
 // 계정을 지웠을 때 쓰이지 않는 사진이 쌓이는 것도 잡아준다
 var used = npcs.map(function (n) { return n.handle.replace("@", "") + ".svg"; }).concat("me.svg");
+if (adHandle) used.push(adHandle + ".svg");
 var orphans = fs.readdirSync(dir).filter(function (f) {
   return f.endsWith(".svg") && used.indexOf(f) === -1;
 });
@@ -50,9 +88,21 @@ var silent = npcs.filter(function (n) { return !n.tweets || !n.tweets.length; })
 assert.strictEqual(silent.length, 0,
   "올릴 트윗이 없는 계정: " + silent.map(function (n) { return n.handle; }).join(", "));
 
+// { t, a } 예외 표기의 a가 attrStat에 없는 값이면(오타·새 카테고리 누락) 그 트윗은
+// toggleReaction에서 gain을 영영 못 만든다(Important 3과 결합해 조용히 트윗을 태운다).
+var attrStatMap = data.reaction.attrStat;
+var badAttr = [];
+npcs.forEach(function (n) {
+  n.tweets.forEach(function (raw) {
+    if (typeof raw !== "string" && !attrStatMap[raw.a])
+      badAttr.push(n.handle + ": 알 수 없는 a(" + raw.a + ") → " + raw.t);
+  });
+});
+assert.strictEqual(badAttr.length, 0, "attrStat에 없는 속성 예외:\n  " + badAttr.join("\n  "));
+
 var owner = {}, cross = [], lengths = [];
 npcs.forEach(function (n) {
-  var t = n.tweets;
+  var t = n.tweets.map(tweetText);
 
   var short = t.filter(function (x) { return x.length < gen.minLength; });
   assert.strictEqual(short.length, 0, n.handle + ": " + gen.minLength +
@@ -93,5 +143,8 @@ buckets.forEach(function (b, i) {
 });
 console.log("  길이 분포 " + buckets.join(" / ") + " (10~42 / 43~75 / 76~107 / 108~140자)");
 var total = npcs.reduce(function (a, n) { return a + n.tweets.length; }, 0);
-console.log("assets OK — 계정 " + npcs.length + "개, 아바타 " + (npcs.length + 1) +
+// 아바타는 실제 파일 수를 센다 — npcs.length + 1로 계산하면 광고 계정처럼
+// NPC 목록 밖에서 쓰는 아바타를 놓친다(위에서 이미 누락·고아 검사는 끝났다)
+var avatarCount = fs.readdirSync(dir).filter(function (f) { return f.endsWith(".svg"); }).length;
+console.log("assets OK — 계정 " + npcs.length + "개, 아바타 " + avatarCount +
   "개, 트윗 " + total + "개 (계정당 " + Math.round(total / npcs.length) + "개)");

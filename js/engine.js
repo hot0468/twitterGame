@@ -16,7 +16,8 @@
   function checkCond(cond, state) {
     for (var key in cond) {
       var v = cond[key];
-      if (key === "chance") continue;
+      // chance는 확률, action·dmStory는 스토리 이벤트 전용 조건이라 스탯 비교가 아니다
+      if (key === "chance" || key === "action" || key === "dmStory") continue;
       if (key === "topStat") {
         var top = SKILL_STATS[0];
         SKILL_STATS.forEach(function (s) { if (state.stats[s] > state.stats[top]) top = s; });
@@ -69,12 +70,30 @@
       notifSeen: 0,
       // npcTweets: 계정별 트윗 보관함 { "@handle": [트윗] }. 그 계정의 프로필이 이걸 그린다.
       // npcSeen: 그 계정을 처음 본 날 { "@handle": day }. 보관함이 이 날부터 자란다.
-      // reacted: 내가 좋아요·리트윗한 남의 트윗 { "tw12": { like: true, rt: true } }.
+      // reacted: 내가 좋아요·리트윗한 남의 트윗 { "tw12": { like: true, rt: true, gained: true, rtDay: n } }.
+      // gained: 이 트윗이 이미 반응 스탯을 줬는지. 취소·재반응으로 무한히 스탯을 뽑는 걸 막는다.
+      // 보관함은 max로 오래된 트윗을 밀어내지만 밀려난 트윗의 reacted 항목은 지우지 않는다 —
+      // 의도된 것이다. gained를 유지해야 하므로 지우면 그 트윗이 보관함에 다시 들어왔을 때
+      // (같은 id로는 안 돌아오지만) 재획득 경로가 열릴 위험이 있다. 장기 플레이에서도
+      // 수천 개 수준이라 실제 메모리 문제는 아니다.
       // following: 내가 팔로우한 계정 { "@handle": true }. 발견(npcSeen)과 별개다 —
       // 만난 계정이라도 팔로우해야 그 트윗이 홈 타임라인에 흐른다.
       // dms: 계정별 대화방 { "@h": { msgs: [{me,text,day}], used: [주제idx], opened: [인사idx], seen: n } }.
       // feed와 별개다 — 실제 X도 DM은 알림이 아니라 자기 뱃지를 쓴다.
       npcTweets: {}, npcSeen: {}, reacted: {}, following: {}, dms: {},
+      // 산 광고 상품 { "keyboard": true }. 상품마다 한 번만 살 수 있고,
+      // 산 것은 광고 후보에서 빠진다 — 반복 구매를 허용하면 "알바 → 구매" 루프가 생긴다.
+      bought: {},
+      // 스토리 DM 진행 상태. { "@h": { node, pending: {to, day}|null, done } }
+      // 기존 dms(대화 내용)와 별개다 — 저쪽은 말풍선, 이쪽은 어디까지 왔는가다.
+      dmStory: {},
+      // 속성별 반응 카운터. perPoint(5)가 차면 그 스탯 +1하고 0으로 돌아간다.
+      // 스탯을 정수로 유지하려고 소수 대신 카운터를 쓴다.
+      reactCount: { 글빨: 0, 유머: 0, 감각: 0, 논란성: 0 },
+      // 오늘 카운터가 오른 반응 수 { day, used }. dailyCap을 넘으면 반응은 여전히 되지만
+      // 카운터는 안 오른다(gained도 안 찍는다) — 검색 화면이 보관함 전체를 모아주므로
+      // 하루 상한이 없으면 무제한 그라인딩으로 밸런스가 무너진다.
+      reactDay: { day: 1, used: 0 },
       feed: [], tweetLog: [], activeEvents: [], eventHistory: [], ending: null
     };
   }
@@ -132,6 +151,33 @@
     });
     state.feed.forEach(function (f) {
       if (f.kind === "npc" && typeof f.likes !== "number") setCounts(f, npcHandles[f.author]);
+    });
+
+    // 옛 세이브의 트윗에는 attr이 없다 — 없으면 그 트윗은 영영 스탯을 안 준다.
+    // 계정 기본 속성(첫 카테고리)으로 채운다. 보관함과 피드 양쪽 다 훑어야 한다.
+    Object.keys(state.npcTweets).forEach(function (h) {
+      var npcA = npcHandles[h];
+      state.npcTweets[h].forEach(function (t) {
+        if (!t.attr && npcA) t.attr = npcA.reactsTo[0];
+      });
+    });
+    state.feed.forEach(function (f) {
+      var npcF = npcHandles[f.author];
+      if (f.kind === "npc" && !f.attr && npcF) f.attr = npcF.reactsTo[0];
+    });
+
+    // 옛 세이브의 반응 기록에는 author가 없다 — reactionsOn()이 그걸로 계정을 가린다.
+    // 아직 남아 있는 트윗에서 채운다. 이미 보관함에서 밀려난 것은 되살릴 수 없지만
+    // 그건 이 보정이 없을 때와 같은 수준이라 더 나빠지지 않는다.
+    Object.keys(state.npcTweets).forEach(function (h) {
+      state.npcTweets[h].forEach(function (t) {
+        var r = state.reacted[t.id];
+        if (r && r.gained && !r.author) r.author = h;
+      });
+    });
+    state.feed.forEach(function (f) {
+      var rf = f.id && state.reacted[f.id];
+      if (f.kind === "npc" && rf && rf.gained && !rf.author) rf.author = f.author;
     });
 
     // 새 계정이어도 첫 화면이 빈 타임라인이면 안 된다. 가입할 때 몇 계정을 팔로우한 셈으로
@@ -293,6 +339,17 @@
     // 길이만 다른 트윗으로 계속 재등장해서 타임라인이 지루해진다(실제로 그랬다).
     // 보관함에 이미 있는 트윗은 후보에서 뺀다 → 한 프로필에 같은 트윗이 두 번 안 뜬다.
     // 그래서 계정의 트윗 수가 max보다 많아야 매일 새 트윗이 나온다(check-assets.js가 검사).
+    // 트윗 데이터는 문자열이거나 { t: 본문, a: 속성 } 객체다.
+    // 객체는 계정 기본 속성과 다르게 잡은 예외를 위한 것이고, 거의 쓰지 않는다.
+    function tweetText(raw) { return typeof raw === "string" ? raw : raw.t; }
+
+    // 속성 결정: 트윗에 지정돼 있으면 그것, 없으면 그 계정의 첫 카테고리.
+    // "계정 하나 = 컨셉 하나"라 계정 카테고리가 기본값인 게 자연스럽다.
+    function tweetAttr(raw, npc) {
+      if (typeof raw !== "string" && raw.a) return raw.a;
+      return npc.reactsTo[0];
+    }
+
     function addTweets(npc, count, dayOf) {
       var gen = genRules();
       var box = state.npcTweets[npc.handle] || (state.npcTweets[npc.handle] = []);
@@ -301,14 +358,17 @@
         // src(치환 전 원문)로 중복을 본다 — text는 {떡밥}이 치환돼 원문과 다르다.
         var used = {};
         box.concat(made).forEach(function (t) { used[t.src || t.text] = true; });
-        var free = npc.tweets.filter(function (t) { return !used[t]; });
+        // 트윗은 문자열이거나 { t, a } 객체다 — 객체는 속성을 계정 기본값과 다르게 잡은 예외다.
+        // 중복 판정은 본문 문자열로 하므로 표기와 무관하게 같은 트윗은 한 번만 나온다.
+        var free = npc.tweets.filter(function (t) { return !used[tweetText(t)]; });
         if (!free.length) break; // 낼 새 트윗이 없으면 그 날은 안 올린다
-        var src = pick(free);
+        var raw = pick(free);
+        var src = tweetText(raw);
         // id는 내 트윗과 같은 seq를 쓴다 — 겹치지 않아야 상세 페이지가 엉키지 않는다.
         // 보관함에만 있는 트윗도 상세로 열 수 있어야 하므로 전부 id를 받는다.
         var t = { id: "tw" + ++state.tweetSeq, src: src,
           author: npc.handle, name: npc.name, kind: "npc",
-          text: fillTemplate(src), day: dayOf(i) };
+          text: fillTemplate(src), day: dayOf(i), attr: tweetAttr(raw, npc) };
         setCounts(t, npc);
         made.push(t);
       }
@@ -334,6 +394,23 @@
         var ae = state.activeEvents.filter(function (a) { return a.eventId === parts[1]; })[0];
         var choice = ev.stages[ae.stage].choices[Number(parts[2])];
         applyEffects(choice.effects, statChanges);
+        // 스토리 이벤트: 고른 것이 DM 스토리를 진행시킨다.
+        // 다음 노드에 delay가 있으면 예약만 하고 답장은 나중에 온다.
+        //
+        // 예약일에 +1을 더하는 이유: 여기는 advanceTurn 맨 앞이라 state.day가 아직
+        // "오늘"인데, 이 턴이 끝나면서 날짜가 넘어가고 곧바로 tickStories()가 돈다.
+        // 그냥 day+delay로 잡으면 그 한 턴이 이미 지나간 것으로 세어져 delay 2가 1일로
+        // 작동한다(실측). sendStory는 하루를 안 쓰는 경로라 이 보정이 필요 없다 —
+        // 이벤트 선택만 하루를 소모하기 때문에 생기는 차이다.
+        if (choice.story) {
+          var sp = String(choice.story).split(":");
+          var sdef = storyDef(sp[0]), sst = state.dmStory[sp[0]];
+          var snode = sdef && sdef.nodes[sp[1]];
+          if (sst && snode) {
+            if (snode.delay > 0) sst.pending = { to: sp[1], day: state.day + snode.delay + 1 };
+            else goStory(sp[0], sp[1]);
+          }
+        }
         feedItems.push({ author: "me", text: choice.label + " — 을(를) 선택했다", day: state.day, likes: 0, rts: 0, kind: "me" });
         if (choice.next === "end") {
           state.activeEvents = state.activeEvents.filter(function (a) { return a.eventId !== ev.id; });
@@ -417,10 +494,26 @@
           });
       });
 
+      // 광고. 아직 안 산 상품 중 하나가 타임라인에 흐른다.
+      // 돈이 모자라도 뜬다 — 살 수 있는 것만 보여주면 "나중에 사야지"가 안 되고,
+      // 버튼이 비활성으로 보이는 게 목표가 된다(UI가 그 상태를 그린다).
+      if (data.ads && rand() < (data.ads.chance || 0)) {
+        var canShow = data.ads.items.filter(function (it) { return !state.bought[it.id]; });
+        if (canShow.length) {
+          var ad = pick(canShow);
+          feedItems.push({ author: data.ads.handle, name: data.ads.name,
+            text: ad.text, day: state.day, kind: "ad",
+            adId: ad.id, label: ad.label, price: ad.price, effects: ad.effects });
+        }
+      }
+
       // 디엠 도착. 이미 만난 DM 계정 중 인사말이 남은 곳에서 하루 한 통까지.
       // 팔로우와 무관하다 — 안 팔로우해도 DM은 온다(실제 X와 동일).
       if (data.dm && rand() < (data.dm.chance || 0)) {
-        var callers = dmAccounts().filter(function (h) { return unusedOpens(h).length; });
+        // 스토리가 도는 계정은 뺀다 — 이야기 중간에 잡담이 끼면 안 된다
+        var callers = dmAccounts().filter(function (h) {
+          return unusedOpens(h).length && !inStory(h);
+        });
         if (callers.length) {
           var who = pick(callers), oi = pick(unusedOpens(who));
           state.dms[who].opened.push(oi);
@@ -432,6 +525,10 @@
         var done = state.eventHistory.indexOf(ev.id) !== -1;
         var active = state.activeEvents.some(function (a) { return a.eventId === ev.id; });
         if (done || active) return;
+        // action: 그 행동을 한 턴에만. dmStory: "핸들:노드"가 지금 그 노드일 때만.
+        // 스토리 이벤트는 chance가 없어서 조건만 맞으면 확정으로 뜬다.
+        if (ev.trigger.action && ev.trigger.action !== actionId) return;
+        if (ev.trigger.dmStory && !atStoryNode(ev.trigger.dmStory)) return;
         if (checkCond(ev.trigger, state) && rand() < (ev.trigger.chance == null ? 1 : ev.trigger.chance)) {
           state.activeEvents.push({ eventId: ev.id, stage: 0 });
           pushEventFeed(ev, 0, feedItems);
@@ -448,6 +545,11 @@
         lived = 2;
       }
       state.day += lived;
+
+      // 스토리 DM: 조건이 맞으면 시작하고, 예약된 지연 답장이 오늘이면 도착한다.
+      // npcSeen 기록 뒤(위)이자 날짜가 넘어간 뒤에 와야 한다 — pending.day는 "그날이 되면"
+      // 도착하는 예약이라, 날짜 증가 전에 검사하면 하루 늦게 도착한다.
+      tickStories();
 
       // 생활비는 행동과 무관한 고정 지출이라 statChanges에 넣지 않는다.
       // (statChanges는 "이 행동이 바꾼 것"이고 미리보기와 1:1로 맞아야 한다)
@@ -473,8 +575,12 @@
     // 트윗에 다 누를 수 있어서, 팔로워를 주면 공짜 성장 경로가 된다).
     // ── 디엠 ────────────────────────────────────────────
     // 방은 처음 쓸 때 만든다. data.dm에 없는 계정은 DM 자체가 없다.
+    // accounts(선택지 풀) 계정과 stories(스토리) 계정 둘 다 방을 갖는다.
     function dmRoom(handle) {
-      if (!data.dm || !data.dm.accounts[handle]) return null;
+      if (!data.dm) return null;
+      var known = data.dm.accounts[handle] ||
+        (data.dm.stories && data.dm.stories[handle]);
+      if (!known) return null;
       return state.dms[handle] ||
         (state.dms[handle] = { msgs: [], used: [], opened: [], seen: 0 });
     }
@@ -532,6 +638,103 @@
       }, 0);
     }
 
+    // ── 스토리 DM ────────────────────────────────────────────
+    // 기존 DM(선택지 풀)과 다른 갈래다. 순서가 있고, 한 번 지나간 노드로 돌아가지 않는다.
+    function storyDef(handle) {
+      return (data.dm && data.dm.stories && data.dm.stories[handle]) || null;
+    }
+    function storyState(handle) { return state.dmStory[handle] || null; }
+
+    // 그 노드로 옮기고 상대의 말을 방에 넣는다. 끝 노드면 done을 찍는다.
+    function goStory(handle, nodeId) {
+      var def = storyDef(handle);
+      if (!def || !def.nodes[nodeId]) return null;
+      var node = def.nodes[nodeId];
+      var st = state.dmStory[handle] ||
+        (state.dmStory[handle] = { node: null, pending: null, done: false });
+      dmRoom(handle);
+      st.node = nodeId;
+      st.pending = null;
+      pushDm(handle, false, node.text);
+      // 노드 보상. DM은 스탯을 안 건드린다는 규칙의 유일한 예외다 —
+      // 대사를 고르는 게 아니라 긴 이야기를 완주해야 한 번 받는 것이라
+      // 남용 경로가 없다(끝 노드는 done이 찍혀 다시 지나가지 않는다).
+      if (node.reward) applyEffects(node.reward, {});
+      if (node.end) st.done = true;
+      return st;
+    }
+
+    // 내가 고를 수 있는 말. 대기(choices 없음)·끝·지연 중이면 빈 배열이다.
+    function storyChoices(handle) {
+      var def = storyDef(handle), st = storyState(handle);
+      if (!def || !st || st.done || st.pending) return [];
+      var node = def.nodes[st.node];
+      if (!node || !node.choices) return [];
+      // 형식은 getDmChoices와 같은 { idx, label }이다 — 같은 선택지 바에 그려지므로
+      // 다르게 두면 UI가 분기해야 하고, 한쪽만 고치면 버튼이 빈칸으로 나온다(실제로 겪음).
+      return node.choices.map(function (c, i) { return { idx: i, label: c.say }; });
+    }
+
+    // 이 계정이 스토리 계정인가. UI가 "선택지가 비었는가"로 판단하면 안 된다 —
+    // 대기·지연 중에도 빈 배열이라, 그걸로 가르면 기존 getDmChoices로 넘어가
+    // accounts에 없는 계정에서 터진다(실제로 겪음).
+    function isStoryAccount(handle) { return !!storyDef(handle); }
+
+    // 스토리 선택. 하루를 안 쓰고 스탯도 안 건드린다(기존 DM과 같은 규칙).
+    // 다음 노드에 delay가 있으면 그 날짜로 예약만 하고 답장은 나중에 온다.
+    function sendStory(handle, idx) {
+      var def = storyDef(handle), st = storyState(handle);
+      if (!def || !st || st.done || st.pending) return null;
+      var node = def.nodes[st.node];
+      if (!node || !node.choices) return null;
+      var choice = node.choices[idx];
+      if (!choice) return null;
+      var room = dmRoom(handle);
+      pushDm(handle, true, choice.say);
+      var next = def.nodes[choice.to];
+      if (next && next.delay > 0) st.pending = { to: choice.to, day: state.day + next.delay };
+      else goStory(handle, choice.to);
+      room.seen = room.msgs.length; // 보고 있는 방이라 바로 읽음
+      return { handle: handle, msgs: room.msgs };
+    }
+
+    // 시작 조건. reactions는 그 계정 트윗에 반응한 수, 나머지는 스탯 비교식이다.
+    function storyReady(handle) {
+      var def = storyDef(handle);
+      if (!def || state.dmStory[handle]) return false;      // 이미 시작했으면 안 한다
+      if (state.npcSeen[handle] == null) return false;      // 만나야 온다
+      var req = def.requires || {};
+      if (req.reactions != null && reactionsOn(handle) < req.reactions) return false;
+      var rest = {};
+      Object.keys(req).forEach(function (k) { if (k !== "reactions") rest[k] = req[k]; });
+      return checkCond(rest, state);
+    }
+
+    // 턴마다: 조건이 맞으면 시작하고, 예약된 지연 답장이 오늘이면 도착시킨다.
+    function tickStories() {
+      if (!data.dm || !data.dm.stories) return;
+      Object.keys(data.dm.stories).forEach(function (h) {
+        if (storyReady(h)) { goStory(h, data.dm.stories[h].start); return; }
+        var st = state.dmStory[h];
+        if (st && st.pending && state.day >= st.pending.day) goStory(h, st.pending.to);
+      });
+    }
+
+    // 스토리가 진행 중(아직 안 끝난)인 계정. 확률 DM 후보에서 빼는 근거다 —
+    // 이야기 중간에 잡담이 끼면 안 된다.
+    function inStory(handle) {
+      var st = state.dmStory[handle];
+      return !!(st && !st.done);
+    }
+
+    // "@핸들:노드" 형식으로 지금 그 스토리가 그 노드에 있는지 본다.
+    // 지연 답장을 기다리는 중(pending)이면 아직 그 노드가 아니다.
+    function atStoryNode(spec) {
+      var at = String(spec).split(":");
+      var st = state.dmStory[at[0]];
+      return !!(st && !st.done && !st.pending && st.node === at[1]);
+    }
+
     // 팔로우 토글. 반응과 같은 부류다 — 하루를 안 쓰고 스탯도 안 건드린다.
     // 바꾸는 건 "내 홈 타임라인에 누가 흐르는가" 하나뿐이다.
     function toggleFollow(handle) {
@@ -541,21 +744,118 @@
       return { handle: handle, on: !!state.following[handle] };
     }
 
+    // 반응 대상 트윗을 찾는다. 보관함에만 있고 feed에는 없는 과거 트윗도 대상이라
+    // 양쪽을 다 뒤진다(저장/복원 뒤 서로 다른 객체다).
+    function findNpcTweet(id) {
+      var found = null;
+      Object.keys(state.npcTweets).forEach(function (h) {
+        state.npcTweets[h].forEach(function (t) { if (t.id === id) found = t; });
+      });
+      if (found) return found;
+      state.feed.forEach(function (f) { if (f.kind === "npc" && f.id === id) found = f; });
+      return found;
+    }
+
+    // 남의 트윗 좋아요/리트윗. 하루를 소모하지 않고 advanceTurn을 거치지 않는다.
+    //
+    // 트윗 하나는 카운터를 정확히 한 번만 올린다(gained). 좋아요든 리트윗이든 먼저 누른
+    // 쪽에서 오르고, 취소해도 되돌리지 않으며 다시 눌러도 추가되지 않는다 —
+    // 안 그러면 켜고 끄기를 반복해 무한히 스탯을 뽑을 수 있다.
     function toggleReaction(tweetId, kind) {
       if (!tweetId || (kind !== "like" && kind !== "rt")) return null;
+      var t = findNpcTweet(tweetId);
+      if (!t) return null;
       var r = state.reacted[tweetId] || (state.reacted[tweetId] = {});
       r[kind] = !r[kind];
       // 리트윗한 날을 남긴다 — 내 타임라인에 그 날짜로 꽂히는 근거다.
       // 취소하면 지운다: 다시 리트윗하면 그날로 새로 올라와야 한다.
       if (kind === "rt") { if (r.rt) r.rtDay = state.day; else delete r.rtDay; }
-      return { id: tweetId, kind: kind, on: r[kind] };
+
+      // 날짜가 바뀌었으면 하루 반응 한도를 리셋한다. day가 다르면 새 날로 본다 —
+      // 멘탈 붕괴로 날짜가 건너뛰어도(lived=2) 그냥 "어제와 다른 날"이라 정상 리셋된다.
+      if (state.reactDay.day !== state.day) state.reactDay = { day: state.day, used: 0 };
+
+      var gain = null;
+      // 켤 때만, 그리고 이 트윗을 아직 안 셌을 때만 카운터가 오른다.
+      if (r[kind] && !r.gained) {
+        var rules = data.reaction, stat = rules && rules.attrStat[t.attr];
+        var cap = rules && rules.dailyCap;
+        // 하루 한도를 넘으면 반응(좋아요/리트윗) 자체는 정상 동작하지만 카운터는 안 오른다.
+        // gained도 안 찍는다 — 안 찍어야 오늘 넘치게 누른 트윗을 내일 다시 눌러 셀 수 있다.
+        var underCap = cap == null || state.reactDay.used < cap;
+        // stat을 실제로 셀 수 있을 때만 gained를 찍는다. attrStat에 없는 속성(오타·누락)이면
+        // 찍지 않아야 매핑을 고친 뒤 같은 트윗에 다시 반응해서 셀 수 있다 — 안 그러면
+        // 데이터 오타 하나로 그 트윗이 영영 스탯을 못 주는 채로 세이브에 굳어버린다.
+        if (stat && underCap) {
+          r.gained = true;
+          // 어느 계정 트윗이었는지 함께 남긴다. 보관함은 max를 넘으면 오래된 것부터
+          // 밀려나므로, 나중에 보관함을 훑어 세면 반응 기록이 하루 2개씩 사라진다
+          // (실제로 겪음 — 몰아서 좋아요하면 스토리 시작 조건이 영영 안 열렸다).
+          r.author = t.author;
+          state.reactDay.used++;
+          var n = (state.reactCount[stat] || 0) + 1, leveled = false;
+          if (n >= rules.perPoint) {
+            n = 0;
+            leveled = true;
+            state.stats[stat] = clampStat(stat, state.stats[stat] + 1);
+          }
+          state.reactCount[stat] = n;
+          gain = { stat: stat, count: n, leveled: leveled };
+        }
+      }
+      return { id: tweetId, kind: kind, on: r[kind], gain: gain };
+    }
+
+    // 광고 상품 구매. 하루를 안 쓴다 — 반응·팔로우·DM과 같은 부류다.
+    // 상품마다 한 번만 살 수 있고(state.bought), 돈이 모자라면 안 산다.
+    // 돈은 유일하게 음수를 허용하는 스탯이지만 여기서는 빚을 내서 사지 못하게 막는다 —
+    // 광고는 여윳돈으로 사는 물건이고, 빚으로 스탯을 사면 그게 최적 전략이 된다.
+    function buyItem(itemId) {
+      if (!data.ads || !itemId) return null;
+      var item = data.ads.items.filter(function (i) { return i.id === itemId; })[0];
+      if (!item || state.bought[itemId]) return null;
+      if (state.stats.돈 < item.price) return null;
+      state.bought[itemId] = true;
+      var changes = {};
+      applyEffects({ "돈": -item.price }, changes);
+      applyEffects(item.effects, changes);
+      return { id: itemId, label: item.label, price: item.price, statChanges: changes };
+    }
+
+    // 그 상품을 살 수 있는가. UI가 구매 버튼을 비활성으로 그릴 근거다 —
+    // 왜 못 사는지도 같이 알려준다(돈이 모자란 건지 이미 산 건지).
+    function canBuy(itemId) {
+      if (!data.ads || !itemId) return { ok: false, reason: "unknown" };
+      var item = data.ads.items.filter(function (i) { return i.id === itemId; })[0];
+      if (!item) return { ok: false, reason: "unknown" };
+      if (state.bought[itemId]) return { ok: false, reason: "bought" };
+      if (state.stats.돈 < item.price) return { ok: false, reason: "money" };
+      return { ok: true, reason: null };
+    }
+
+    // 그 계정 트윗 중 내가 반응해서 카운트된 수. 좋아요·리트윗 합산이고 트윗당 1회다
+    // (gained가 그 기준이다 — toggleReaction과 같은 기준을 쓴다).
+    // state.reacted엔 트윗 id만 있어서 어느 계정 것인지는 보관함을 봐야 안다.
+    // 보관함이 아니라 반응 기록에서 센다. 보관함은 오래된 트윗을 밀어내므로
+    // 거기서 세면 반응 기록이 하루 2개씩 증발한다(실제로 겪음).
+    function reactionsOn(handle) {
+      var n = 0;
+      Object.keys(state.reacted).forEach(function (id) {
+        var r = state.reacted[id];
+        if (r.gained && r.author === handle) n++;
+      });
+      return n;
     }
 
     return { getState: function () { return state; }, getActions: getActions,
       previewAction: previewAction, advanceTurn: advanceTurn,
       toggleReaction: toggleReaction, toggleFollow: toggleFollow,
       dmAccounts: dmAccounts, getDmChoices: getDmChoices, sendDm: sendDm,
-      markDmRead: markDmRead, unreadDms: unreadDms };
+      markDmRead: markDmRead, unreadDms: unreadDms,
+      storyChoices: storyChoices, sendStory: sendStory, isStoryAccount: isStoryAccount,
+      buyItem: buyItem, canBuy: canBuy,
+      _goStory: goStory,
+      _reactionsOn: reactionsOn };
   }
 
   return { _utils: { compare: compare, checkCond: checkCond, evalFormula: evalFormula,
