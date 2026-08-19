@@ -667,8 +667,11 @@ var beforeDay = gRe.getState().day;
 var beforeStats = JSON.stringify(gRe.getState().stats);
 var beforeFollowers = gRe.getState().followers;
 var res = gRe.toggleReaction(someTweet.id, "like");
-assert.deepStrictEqual(res, { id: someTweet.id, kind: "like", on: true }, "누르면 켜진다");
+assert.strictEqual(res.id, someTweet.id);
+assert.strictEqual(res.kind, "like");
+assert.strictEqual(res.on, true, "누르면 켜진다");
 assert.strictEqual(gRe.getState().day, beforeDay, "반응은 하루를 소모하지 않는다");
+// 반응 한 번은 perPoint(5) 미만이라 레벨업하지 않으므로 스탯은 그대로다
 assert.strictEqual(JSON.stringify(gRe.getState().stats), beforeStats, "스탯을 건드리지 않는다");
 assert.strictEqual(gRe.getState().followers, beforeFollowers, "팔로워도 안 늘어난다");
 assert.strictEqual(gRe.getState().reacted[someTweet.id].like, true, "누른 기록이 남는다");
@@ -917,3 +920,88 @@ assert.strictEqual(boxOv[0].text, "떡밥으로 지정한 트윗입니다", "tex
 assert.strictEqual(boxOv[0].src, "떡밥으로 지정한 트윗입니다", "src도 본문 문자열이다");
 
 console.log("트윗 속성 파싱 OK");
+
+// --- 반응 카운터와 스탯 상승 ---
+// 트윗이 전부 humor인 계정 하나만 두고 시작한다 — 카운터를 정확히 셀 수 있다
+function reactData(handle, cat, prefix) {
+  var d = loadData();
+  d.npcs = [{ handle: handle, name: "테스트", bio: "b", followers: 100,
+    reactsTo: [cat], replies: ["r"],
+    tweets: [prefix + " 첫번째 트윗입니다", prefix + " 두번째 트윗입니다",
+             prefix + " 세번째 트윗입니다", prefix + " 네번째 트윗입니다",
+             prefix + " 다섯번째 트윗입니다", prefix + " 여섯번째 트윗입니다"] }];
+  d.timeline = Object.assign({}, d.timeline,
+    { startFollowing: 1, gen: Object.assign({}, d.timeline.gen, { seed: 6, max: 6 }) });
+  return d;
+}
+function reactGame() { return Engine.create(reactData("@t_react", "humor", "가")); }
+
+var gR = reactGame();
+var boxR = gR.getState().npcTweets["@t_react"];
+assert.strictEqual(boxR.length, 6, "보관함에 6개");
+
+// 첫 반응: 카운터 1, 스탯은 아직 그대로
+var humor0 = gR.getState().stats.유머;
+var r1 = gR.toggleReaction(boxR[0].id, "like");
+assert.strictEqual(r1.gain.stat, "유머");
+assert.strictEqual(r1.gain.count, 1);
+assert.strictEqual(r1.gain.leveled, false);
+assert.strictEqual(gR.getState().stats.유머, humor0, "1개로는 안 오른다");
+
+// 같은 트윗을 리트윗해도 추가로 세지 않는다 (트윗당 1회)
+var r2 = gR.toggleReaction(boxR[0].id, "rt");
+assert.strictEqual(r2.gain, null, "이미 센 트윗은 gain이 null");
+assert.strictEqual(gR.getState().reactCount.유머, 1, "카운터가 안 늘어야 한다");
+
+// 취소해도 되돌리지 않는다
+gR.toggleReaction(boxR[0].id, "like");
+assert.strictEqual(gR.getState().reactCount.유머, 1, "취소해도 카운터 유지");
+// 다시 눌러도 추가되지 않는다 — 없으면 켜고 끄기로 무한 증식한다
+gR.toggleReaction(boxR[0].id, "like");
+assert.strictEqual(gR.getState().reactCount.유머, 1, "재반응해도 카운터 유지");
+
+// 5개를 채우면 +1, 카운터는 0으로
+for (var iR = 1; iR < 5; iR++) gR.toggleReaction(boxR[iR].id, "like");
+assert.strictEqual(gR.getState().stats.유머, humor0 + 1, "5개 채우면 +1");
+assert.strictEqual(gR.getState().reactCount.유머, 0, "카운터는 0으로");
+assert.strictEqual(gR.getState().stats.유머 % 1, 0, "스탯은 정수");
+
+// 5번째 반응의 gain이 leveled를 알린다
+var gR2 = reactGame();
+var boxR2 = gR2.getState().npcTweets["@t_react"];
+for (var jR = 0; jR < 4; jR++) gR2.toggleReaction(boxR2[jR].id, "like");
+var r5 = gR2.toggleReaction(boxR2[4].id, "like");
+assert.strictEqual(r5.gain.leveled, true, "5번째는 leveled");
+assert.strictEqual(r5.gain.count, 0, "오른 직후 카운터는 0");
+
+// 반응은 하루를 소모하지 않는다
+assert.strictEqual(gR2.getState().day, 1, "반응해도 날짜가 안 넘어간다");
+
+// bait 속성은 논란성을 올린다
+var gB = Engine.create(reactData("@t_bait", "bait", "나"));
+var boxB = gB.getState().npcTweets["@t_bait"];
+var con0 = gB.getState().stats.논란성;
+for (var kR = 0; kR < 5; kR++) gB.toggleReaction(boxB[kR].id, "like");
+assert.strictEqual(gB.getState().stats.논란성, con0 + 1, "bait는 논란성을 올린다");
+
+// 모르는 입력은 null
+assert.strictEqual(gR.toggleReaction("없는id", "like"), null);
+assert.strictEqual(gR.toggleReaction(boxR[0].id, "이상한kind"), null);
+
+// 옛 세이브에 reactCount가 없어도 채워진다
+var savedOld = JSON.parse(JSON.stringify(reactGame().getState()));
+delete savedOld.reactCount;
+var gOld = Engine.create(reactData("@t_react", "humor", "가"), savedOld);
+assert.ok(gOld.getState().reactCount, "reactCount가 채워져야 한다");
+assert.strictEqual(gOld.getState().reactCount.유머, 0);
+
+// 옛 세이브의 트윗에 attr이 채워진다 — 없으면 그 트윗은 영영 스탯을 안 준다
+var savedNoAttr = JSON.parse(JSON.stringify(reactGame().getState()));
+Object.keys(savedNoAttr.npcTweets).forEach(function (h) {
+  savedNoAttr.npcTweets[h].forEach(function (t) { delete t.attr; });
+});
+var gNoAttr = Engine.create(reactData("@t_react", "humor", "가"), savedNoAttr);
+var boxNA = gNoAttr.getState().npcTweets["@t_react"];
+assert.strictEqual(boxNA[0].attr, "humor", "옛 세이브 트윗에 계정 기본 속성이 채워진다");
+
+console.log("반응 카운터와 스탯 상승 OK");

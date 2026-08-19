@@ -75,6 +75,9 @@
       // dms: 계정별 대화방 { "@h": { msgs: [{me,text,day}], used: [주제idx], opened: [인사idx], seen: n } }.
       // feed와 별개다 — 실제 X도 DM은 알림이 아니라 자기 뱃지를 쓴다.
       npcTweets: {}, npcSeen: {}, reacted: {}, following: {}, dms: {},
+      // 속성별 반응 카운터. perPoint(5)가 차면 그 스탯 +1하고 0으로 돌아간다.
+      // 스탯을 정수로 유지하려고 소수 대신 카운터를 쓴다.
+      reactCount: { 글빨: 0, 유머: 0, 감각: 0, 논란성: 0 },
       feed: [], tweetLog: [], activeEvents: [], eventHistory: [], ending: null
     };
   }
@@ -132,6 +135,19 @@
     });
     state.feed.forEach(function (f) {
       if (f.kind === "npc" && typeof f.likes !== "number") setCounts(f, npcHandles[f.author]);
+    });
+
+    // 옛 세이브의 트윗에는 attr이 없다 — 없으면 그 트윗은 영영 스탯을 안 준다.
+    // 계정 기본 속성(첫 카테고리)으로 채운다. 보관함과 피드 양쪽 다 훑어야 한다.
+    Object.keys(state.npcTweets).forEach(function (h) {
+      var npcA = npcHandles[h];
+      state.npcTweets[h].forEach(function (t) {
+        if (!t.attr && npcA) t.attr = npcA.reactsTo[0];
+      });
+    });
+    state.feed.forEach(function (f) {
+      var npcF = npcHandles[f.author];
+      if (f.kind === "npc" && !f.attr && npcF) f.attr = npcF.reactsTo[0];
     });
 
     // 새 계정이어도 첫 화면이 빈 타임라인이면 안 된다. 가입할 때 몇 계정을 팔로우한 셈으로
@@ -555,14 +571,50 @@
       return { handle: handle, on: !!state.following[handle] };
     }
 
+    // 반응 대상 트윗을 찾는다. 보관함에만 있고 feed에는 없는 과거 트윗도 대상이라
+    // 양쪽을 다 뒤진다(저장/복원 뒤 서로 다른 객체다).
+    function findNpcTweet(id) {
+      var found = null;
+      Object.keys(state.npcTweets).forEach(function (h) {
+        state.npcTweets[h].forEach(function (t) { if (t.id === id) found = t; });
+      });
+      if (found) return found;
+      state.feed.forEach(function (f) { if (f.kind === "npc" && f.id === id) found = f; });
+      return found;
+    }
+
+    // 남의 트윗 좋아요/리트윗. 하루를 소모하지 않고 advanceTurn을 거치지 않는다.
+    //
+    // 트윗 하나는 카운터를 정확히 한 번만 올린다(gained). 좋아요든 리트윗이든 먼저 누른
+    // 쪽에서 오르고, 취소해도 되돌리지 않으며 다시 눌러도 추가되지 않는다 —
+    // 안 그러면 켜고 끄기를 반복해 무한히 스탯을 뽑을 수 있다.
     function toggleReaction(tweetId, kind) {
       if (!tweetId || (kind !== "like" && kind !== "rt")) return null;
+      var t = findNpcTweet(tweetId);
+      if (!t) return null;
       var r = state.reacted[tweetId] || (state.reacted[tweetId] = {});
       r[kind] = !r[kind];
       // 리트윗한 날을 남긴다 — 내 타임라인에 그 날짜로 꽂히는 근거다.
       // 취소하면 지운다: 다시 리트윗하면 그날로 새로 올라와야 한다.
       if (kind === "rt") { if (r.rt) r.rtDay = state.day; else delete r.rtDay; }
-      return { id: tweetId, kind: kind, on: r[kind] };
+
+      var gain = null;
+      // 켤 때만, 그리고 이 트윗을 아직 안 셌을 때만 카운터가 오른다.
+      if (r[kind] && !r.gained) {
+        r.gained = true;
+        var rules = data.reaction, stat = rules && rules.attrStat[t.attr];
+        if (stat) {
+          var n = (state.reactCount[stat] || 0) + 1, leveled = false;
+          if (n >= rules.perPoint) {
+            n = 0;
+            leveled = true;
+            state.stats[stat] = clampStat(stat, state.stats[stat] + 1);
+          }
+          state.reactCount[stat] = n;
+          gain = { stat: stat, count: n, leveled: leveled };
+        }
+      }
+      return { id: tweetId, kind: kind, on: r[kind], gain: gain };
     }
 
     return { getState: function () { return state; }, getActions: getActions,
