@@ -50,6 +50,21 @@ GAME_DATA.events = [
           { label: "계정을 잠그고 알바만 한다", effects: { "돈": 500000, "팔로워": "-(팔로워*0.05)", "멘탈": 10 }, next: "end" },
           { label: "무시하고 트윗을 계속한다", effects: { "멘탈": -15, "논란성": 5 }, next: "end" }
         ] }
+    ] },
+
+  // ── 스토리 이벤트 ──
+  // 기존 이벤트는 전부 확률로 알아서 발동하는데(chance), 이건 행동에 걸린 확정 이벤트다.
+  //   action:   그 행동을 한 턴에만
+  //   dmStory:  "핸들:노드" — 그 스토리가 그 노드에 있을 때만
+  // 선택지의 story가 DM 스토리를 그 노드로 진행시킨다. 셋 다 범용 노브다.
+  { id: "old_school",
+    trigger: { action: "walk", dmStory: "@old_records:s2" },
+    stages: [
+      { feed: ["산책하다 문 닫힌 학교 앞을 지났다.\n녹슨 정문 옆 게시판에 빛바랜 졸업생 명단이 붙어 있다"],
+        choices: [
+          { label: "사진을 찍어둔다", story: "@old_records:s4a", next: "end" },
+          { label: "눈으로만 확인한다", story: "@old_records:s4b", next: "end" }
+        ] }
     ] }
 ];
 if (typeof module !== "undefined") module.exports = GAME_DATA;

@@ -16,7 +16,8 @@
   function checkCond(cond, state) {
     for (var key in cond) {
       var v = cond[key];
-      if (key === "chance") continue;
+      // chance는 확률, action·dmStory는 스토리 이벤트 전용 조건이라 스탯 비교가 아니다
+      if (key === "chance" || key === "action" || key === "dmStory") continue;
       if (key === "topStat") {
         var top = SKILL_STATS[0];
         SKILL_STATS.forEach(function (s) { if (state.stats[s] > state.stats[top]) top = s; });
@@ -376,6 +377,17 @@
         var ae = state.activeEvents.filter(function (a) { return a.eventId === parts[1]; })[0];
         var choice = ev.stages[ae.stage].choices[Number(parts[2])];
         applyEffects(choice.effects, statChanges);
+        // 스토리 이벤트: 고른 것이 DM 스토리를 진행시킨다.
+        // 다음 노드에 delay가 있으면 예약만 하고 답장은 나중에 온다.
+        if (choice.story) {
+          var sp = String(choice.story).split(":");
+          var sdef = storyDef(sp[0]), sst = state.dmStory[sp[0]];
+          var snode = sdef && sdef.nodes[sp[1]];
+          if (sst && snode) {
+            if (snode.delay > 0) sst.pending = { to: sp[1], day: state.day + snode.delay };
+            else goStory(sp[0], sp[1]);
+          }
+        }
         feedItems.push({ author: "me", text: choice.label + " — 을(를) 선택했다", day: state.day, likes: 0, rts: 0, kind: "me" });
         if (choice.next === "end") {
           state.activeEvents = state.activeEvents.filter(function (a) { return a.eventId !== ev.id; });
@@ -477,6 +489,10 @@
         var done = state.eventHistory.indexOf(ev.id) !== -1;
         var active = state.activeEvents.some(function (a) { return a.eventId === ev.id; });
         if (done || active) return;
+        // action: 그 행동을 한 턴에만. dmStory: "핸들:노드"가 지금 그 노드일 때만.
+        // 스토리 이벤트는 chance가 없어서 조건만 맞으면 확정으로 뜬다.
+        if (ev.trigger.action && ev.trigger.action !== actionId) return;
+        if (ev.trigger.dmStory && !atStoryNode(ev.trigger.dmStory)) return;
         if (checkCond(ev.trigger, state) && rand() < (ev.trigger.chance == null ? 1 : ev.trigger.chance)) {
           state.activeEvents.push({ eventId: ev.id, stage: 0 });
           pushEventFeed(ev, 0, feedItems);
@@ -662,6 +678,14 @@
     function inStory(handle) {
       var st = state.dmStory[handle];
       return !!(st && !st.done);
+    }
+
+    // "@핸들:노드" 형식으로 지금 그 스토리가 그 노드에 있는지 본다.
+    // 지연 답장을 기다리는 중(pending)이면 아직 그 노드가 아니다.
+    function atStoryNode(spec) {
+      var at = String(spec).split(":");
+      var st = state.dmStory[at[0]];
+      return !!(st && !st.done && !st.pending && st.node === at[1]);
     }
 
     // 팔로우 토글. 반응과 같은 부류다 — 하루를 안 쓰고 스탯도 안 건드린다.

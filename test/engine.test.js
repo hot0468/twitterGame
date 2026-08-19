@@ -1237,3 +1237,61 @@ assert.strictEqual(gE.getState().dmStory["@old_records"].done, true, "끝 노드
 assert.deepStrictEqual(gE.storyChoices("@old_records"), [], "끝나면 선택지 없음");
 
 console.log("괴담계 스토리 DM OK");
+
+// --- 폐교 이벤트 ---
+// 스토리가 s2일 때 산책하면 발동한다
+var gW = storyGame();
+gW.advanceTurn("rest", false);              // 스토리 시작 (s1)
+gW.sendStory("@old_records", 0);            // s2 (대기)
+assert.strictEqual(gW.getState().dmStory["@old_records"].node, "s2");
+var r1 = gW.advanceTurn("walk", false);
+assert.ok(r1.triggeredEvents.indexOf("old_school") !== -1, "산책하면 폐교 이벤트가 뜬다");
+var evActs = gW.getActions().filter(function (a) { return a.kind === "event"; });
+assert.strictEqual(evActs.length, 2, "선택지 2개(사진/눈으로만)");
+
+// 다른 행동에선 안 뜬다
+var gW2 = storyGame();
+gW2.advanceTurn("rest", false);
+gW2.sendStory("@old_records", 0);
+var r2 = gW2.advanceTurn("rest", false);
+assert.strictEqual(r2.triggeredEvents.indexOf("old_school"), -1, "휴식으로는 안 뜬다");
+
+// 스토리가 s2가 아니면 산책해도 안 뜬다
+var gW3 = storyGame();
+gW3.advanceTurn("rest", false);             // s1에 머문다
+var r3 = gW3.advanceTurn("walk", false);
+assert.strictEqual(r3.triggeredEvents.indexOf("old_school"), -1, "s1에선 안 뜬다");
+
+// 스토리가 아예 없으면 산책해도 안 뜬다
+var gW4 = Engine.create(loadData());
+var r4 = gW4.advanceTurn("walk", false);
+assert.strictEqual(r4.triggeredEvents.indexOf("old_school"), -1, "스토리 없으면 안 뜬다");
+
+// 선택지가 스토리를 진행시킨다 — 사진(s4a, delay 2)
+var photoIdx = -1;
+gW.getActions().forEach(function (a, i) {
+  if (a.kind === "event" && a.label.indexOf("사진") !== -1) photoIdx = i;
+});
+assert.ok(photoIdx >= 0, "사진 선택지를 찾았다");
+var photoId = gW.getActions()[photoIdx].id;
+gW.advanceTurn(photoId, false);
+var stW = gW.getState().dmStory["@old_records"];
+assert.ok(stW.pending, "delay 2라 예약된다");
+assert.strictEqual(stW.pending.to, "s4a");
+gW.advanceTurn("rest", false);
+assert.strictEqual(gW.getState().dmStory["@old_records"].node, "s4a", "2일 뒤 도착");
+
+// 눈으로만은 즉시 s4b
+var gV = storyGame();
+gV.advanceTurn("rest", false);
+gV.sendStory("@old_records", 0);
+gV.advanceTurn("walk", false);
+var eyeId = null;
+gV.getActions().forEach(function (a) {
+  if (a.kind === "event" && a.label.indexOf("눈으로") !== -1) eyeId = a.id;
+});
+assert.ok(eyeId, "눈으로만 선택지를 찾았다");
+gV.advanceTurn(eyeId, false);
+assert.strictEqual(gV.getState().dmStory["@old_records"].node, "s4b", "즉시 도착");
+
+console.log("폐교 이벤트 OK");
