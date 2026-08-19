@@ -379,12 +379,18 @@
         applyEffects(choice.effects, statChanges);
         // 스토리 이벤트: 고른 것이 DM 스토리를 진행시킨다.
         // 다음 노드에 delay가 있으면 예약만 하고 답장은 나중에 온다.
+        //
+        // 예약일에 +1을 더하는 이유: 여기는 advanceTurn 맨 앞이라 state.day가 아직
+        // "오늘"인데, 이 턴이 끝나면서 날짜가 넘어가고 곧바로 tickStories()가 돈다.
+        // 그냥 day+delay로 잡으면 그 한 턴이 이미 지나간 것으로 세어져 delay 2가 1일로
+        // 작동한다(실측). sendStory는 하루를 안 쓰는 경로라 이 보정이 필요 없다 —
+        // 이벤트 선택만 하루를 소모하기 때문에 생기는 차이다.
         if (choice.story) {
           var sp = String(choice.story).split(":");
           var sdef = storyDef(sp[0]), sst = state.dmStory[sp[0]];
           var snode = sdef && sdef.nodes[sp[1]];
           if (sst && snode) {
-            if (snode.delay > 0) sst.pending = { to: sp[1], day: state.day + snode.delay };
+            if (snode.delay > 0) sst.pending = { to: sp[1], day: state.day + snode.delay + 1 };
             else goStory(sp[0], sp[1]);
           }
         }

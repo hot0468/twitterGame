@@ -1278,6 +1278,9 @@ gW.advanceTurn(photoId, false);
 var stW = gW.getState().dmStory["@old_records"];
 assert.ok(stW.pending, "delay 2라 예약된다");
 assert.strictEqual(stW.pending.to, "s4a");
+// delay 2는 턴을 두 번 더 돌아야 온다. 한 번만 돌고 검사하면 1일 뒤를 재는 셈이다.
+gW.advanceTurn("rest", false);
+assert.strictEqual(gW.getState().dmStory["@old_records"].node, "s2", "1일 뒤엔 아직");
 gW.advanceTurn("rest", false);
 assert.strictEqual(gW.getState().dmStory["@old_records"].node, "s4a", "2일 뒤 도착");
 
@@ -1295,3 +1298,40 @@ gV.advanceTurn(eyeId, false);
 assert.strictEqual(gV.getState().dmStory["@old_records"].node, "s4b", "즉시 도착");
 
 console.log("폐교 이벤트 OK");
+
+// --- 이벤트 선택지의 delay가 정확히 N일인가 ---
+// 이벤트 선택은 advanceTurn 맨 앞에서 처리되는데 그 시점의 state.day는 아직 오늘이다.
+// 이 턴이 끝나며 날짜가 넘어가고 곧바로 tickStories()가 돌기 때문에, 보정이 없으면
+// delay 2가 1일로 작동한다(실제로 겪음). sendStory는 하루를 안 써서 이 문제가 없다.
+var gDly = storyGame();
+gDly.advanceTurn("rest", false);            // s1
+gDly.sendStory("@old_records", 0);          // s2 (대기)
+gDly.advanceTurn("walk", false);            // 폐교 이벤트
+var photoAct = null;
+gDly.getActions().forEach(function (a) {
+  if (a.kind === "event" && a.label.indexOf("사진") !== -1) photoAct = a.id;
+});
+gDly.advanceTurn(photoAct, false);          // 사진 → s4a는 delay 2
+assert.strictEqual(gDly.getState().dmStory["@old_records"].node, "s2",
+  "사진을 찍은 턴에는 아직 s2 (예약만 잡힌다)");
+gDly.advanceTurn("rest", false);
+assert.strictEqual(gDly.getState().dmStory["@old_records"].node, "s2",
+  "delay 2라 1일 뒤엔 아직 안 온다");
+gDly.advanceTurn("rest", false);
+assert.strictEqual(gDly.getState().dmStory["@old_records"].node, "s4a",
+  "2일 뒤에 도착한다");
+
+// delay가 없는 선택지는 그 턴에 바로 도착한다
+var gNow = storyGame();
+gNow.advanceTurn("rest", false);
+gNow.sendStory("@old_records", 0);
+gNow.advanceTurn("walk", false);
+var eyeAct = null;
+gNow.getActions().forEach(function (a) {
+  if (a.kind === "event" && a.label.indexOf("눈으로") !== -1) eyeAct = a.id;
+});
+gNow.advanceTurn(eyeAct, false);
+assert.strictEqual(gNow.getState().dmStory["@old_records"].node, "s4b",
+  "delay 없는 선택지는 즉시 도착");
+
+console.log("이벤트 delay OK");
