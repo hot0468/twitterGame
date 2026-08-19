@@ -1102,3 +1102,25 @@ var gOldCap = Engine.create(reactData("@t_react", "humor", "가"), savedNoReactD
 assert.ok(gOldCap.getState().reactDay, "reactDay가 채워져야 한다");
 
 console.log("하루 반응 한도 OK");
+
+// --- 산책하기 ---
+var gWalk = Engine.create(loadData());
+var walkIds = gWalk.getActions().map(function (a) { return a.id; });
+assert.ok(walkIds.indexOf("walk") !== -1, "산책하기는 처음부터 고를 수 있다");
+
+var beforeWalk = gWalk.getState().stats;
+var m0 = beforeWalk.멘탈, s0 = beforeWalk.감각;
+gWalk.advanceTurn("walk", false);
+var afterWalk = gWalk.getState().stats;
+assert.strictEqual(afterWalk.멘탈, Math.min(m0 + 8, m0 + 8), "산책은 멘탈 +8");
+assert.strictEqual(afterWalk.감각, s0 + 1, "산책은 감각 +1");
+assert.strictEqual(gWalk.getState().day, 2, "산책도 하루를 쓴다");
+
+// 트윗으로 올릴 수도 있다
+var gWalk2 = Engine.create(loadData());
+var pv = gWalk2.previewAction("walk");
+assert.ok(pv, "산책하기에 미리보기가 있다");
+assert.strictEqual(pv.effects.멘탈, 8);
+assert.ok(pv.tweetEffects, "트윗 효과가 있다");
+
+console.log("산책하기 OK");
