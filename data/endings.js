@@ -4,7 +4,12 @@ var GAME_DATA = GAME_DATA || {};
 GAME_DATA.endings = {
   threshold: 1000000,
   list: [
-    { id: "cyber_wrecker", title: "사이버렉카", condition: { "논란성": ">=50" },
+    // 임계값 300: 어그로 전략(의도된 사이버렉카 경로)은 논란성 740까지 쌓아 여전히 도달하고,
+    // bait 트윗을 우선 노려 반응(좋아요)만 그라인딩해도 dailyCap(8) 아래에서 233이 상한이라
+    // 도달하지 못한다. 반응으로도 논란성이 쌓이게 되면서 예전 50은 bait 트윗을 챙겨보기만
+    // 해도 걸리는 값이라 topStat 엔딩 3종이 막혔다 — 두 경로를 실측(test/sim.js)하고 그 사이로
+    // 올렸다.
+    { id: "cyber_wrecker", title: "사이버렉카", condition: { "논란성": ">=300" },
       text: "당신은 논란을 연료로 달리는 계정이 되었다. 팔로워는 많지만, 절반은 안티다." },
     // 빚은 게임 오버가 아니다 — 마이너스 통장으로도 100만은 찍을 수 있고, 그건 그것대로 엔딩이다
     { id: "debt_star", title: "빚쟁이 스타", condition: { "돈": "<0" },

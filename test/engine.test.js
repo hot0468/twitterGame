@@ -474,7 +474,7 @@ assert.strictEqual(g10.getState().ending, "author");
 
 var g11 = Engine.create(loadData(), null, function () { return 0.99; });
 g11.getState().followers = GOAL;
-g11.getState().stats.논란성 = 50;
+g11.getState().stats.논란성 = 300;
 g11.getState().stats.유머 = 40;
 var r7 = g11.advanceTurn("meme", false);
 assert.strictEqual(r7.ending.id, "cyber_wrecker", "논란성 조건이 topStat보다 우선(list 순서)");
