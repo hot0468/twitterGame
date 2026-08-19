@@ -208,8 +208,12 @@
   });
 
   // 홈 타임라인 탭 (추천 / 팔로우 중)
+  // 추천 탭은 누를 때마다 순서를 새로 섞는다(실제 X의 새로고침) — state가 필요하다.
   document.querySelectorAll(".home-tab").forEach(function (btn) {
-    btn.onclick = function () { UI.setHomeTab(btn.dataset.htab); refresh(); };
+    btn.onclick = function () {
+      UI.setHomeTab(btn.dataset.htab, game.getState());
+      refresh();
+    };
   });
 
   // ── 검색 ──

@@ -42,7 +42,9 @@
   // 실제 트위터처럼 답글은 홈 타임라인에 안 뜬다 — 알림에서 보거나 트윗 상세로 들어가야 한다
   // 정산은 주 1회뿐이고 이 게임의 심장이라 타임라인·알림 양쪽에 남긴다
   // npc = 팔로잉 계정들의 전용 트윗. 타임라인에만 흐르고 알림엔 안 뜬다(남의 트윗이니까)
-  var TIMELINE_KINDS = ["me", "npc", "event", "system", "settlement"];
+  // 정산은 타임라인에 없다 — 실제 X도 수익 정산을 타임라인에 띄우지 않는다.
+  // 주급날 팝업으로 보고, 기록은 알림에 남는다(NOTIF_KINDS에는 그대로 있다).
+  var TIMELINE_KINDS = ["me", "npc", "event", "system"];
   var NOTIF_KINDS = ["like", "retweet", "follow", "reply", "event", "system", "settlement"];
 
   function notifItemsOf(state) {
@@ -362,9 +364,32 @@
   }
 
   // 홈 타임라인 탭. 추천 = 내 타임라인 전부, 팔로우 중 = 팔로우한 계정이 쓴 글만.
-  // (내 트윗·이벤트·정산 카드를 빼고 남의 글만 읽고 싶을 때 쓰는 필터다)
+  // (내 트윗·이벤트를 빼고 남의 글만 읽고 싶을 때 쓰는 필터다)
   var homeTab = "all";
-  function setHomeTab(name) {
+
+  // 추천 탭의 섞인 순서. 실제 X처럼 시간순이 아니라 알고리즘 순으로 보이게 한다.
+  // 순서를 기억해두는 이유: 매 렌더마다 다시 섞으면 좋아요 하나만 눌러도 타임라인이
+  // 통째로 재배열돼 읽던 자리를 잃는다. 탭을 누를 때만 새로 섞는다(= 새로고침).
+  // 항목 id를 키로 순위를 매긴다 — 새 트윗은 id가 없으니 맨 위(시간순)로 간다.
+  var shuffleRank = null;
+
+  function reshuffle(state) {
+    shuffleRank = {};
+    var ids = [];
+    (state.feed || []).forEach(function (f) { if (f.id) ids.push(f.id); });
+    (state.tweetLog || []).forEach(function (t) { if (t.id) ids.push(t.id); });
+    // Fisher-Yates. 엔진의 rand가 아니라 Math.random을 쓴다 —
+    // 이건 표시 순서일 뿐이라 세이브에 남지 않고 회귀 테스트도 걸지 않는다.
+    for (var i = ids.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var t = ids[i]; ids[i] = ids[j]; ids[j] = t;
+    }
+    ids.forEach(function (id, i) { shuffleRank[id] = i; });
+  }
+
+  function setHomeTab(name, state) {
+    // 추천 탭을 (다시) 누르면 새로 섞는다. 실제 X도 새로고침해야 순서가 바뀐다.
+    if (name === "all" && state) reshuffle(state);
     homeTab = name;
     document.querySelectorAll(".home-tab").forEach(function (b) {
       b.classList.toggle("active", b.dataset.htab === name);
@@ -856,8 +881,17 @@
       .concat(mine)
       .sort(function (a, b) { return sortDay(b) - sortDay(a); });
     if (homeTab === "following") {
-      // 팔로우한 계정이 쓴 글만 — 내 트윗·이벤트·정산은 뺀다. 내 리트윗은 남의 글이라 남긴다.
+      // 팔로우한 계정이 쓴 글만 — 내 트윗·이벤트는 뺀다. 내 리트윗은 남의 글이라 남긴다.
       timeline = timeline.filter(function (f) { return f.kind === "npc"; });
+    } else if (shuffleRank) {
+      // 추천 탭은 실제 X처럼 시간순이 아니다. 탭을 누를 때 정한 순서를 그대로 쓴다 —
+      // 매 렌더마다 다시 섞으면 좋아요 하나에도 타임라인이 재배열된다.
+      // 순위가 없는 항목(그 뒤에 생긴 새 트윗)은 맨 위로 — 방금 올린 글이 안 보이면 안 된다.
+      timeline = timeline.slice().sort(function (a, b) {
+        var ra = a.id && shuffleRank[a.id] != null ? shuffleRank[a.id] : -1;
+        var rb = b.id && shuffleRank[b.id] != null ? shuffleRank[b.id] : -1;
+        return ra - rb;
+      });
     }
     renderFeed($("feed"), timeline,
       homeTab === "following"
