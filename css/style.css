@@ -74,12 +74,12 @@ body { background: var(--bg); color: var(--text); font-size: var(--fs-sm);
 /* 스탯 아이콘은 글씨보다 크게 — 1.35em이면 12px 글씨에서 형태가 안 읽힌다 */
 .stat-name .icon { width: 1.4rem; height: 1.4rem; }
 .stat-row b { color: var(--text); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
-.stat-row.tone-ink .icon, .attr-badge.tone-ink { color: #1d9bf0; }
-.stat-row.tone-warm .icon, .attr-badge.tone-warm { color: #e8a020; }
-.stat-row.tone-violet .icon, .attr-badge.tone-violet { color: #8b5cf6; }
-.stat-row.tone-calm .icon, .attr-badge.tone-calm { color: #12a594; }
-.stat-row.tone-money .icon, .attr-badge.tone-money { color: #15883f; }
-.stat-row.tone-hot .icon, .attr-badge.tone-hot { color: #e5484d; }
+.stat-row.tone-ink .icon, .attr-badge.tone-ink, .gain-toast.tone-ink { color: #1d9bf0; }
+.stat-row.tone-warm .icon, .attr-badge.tone-warm, .gain-toast.tone-warm { color: #e8a020; }
+.stat-row.tone-violet .icon, .attr-badge.tone-violet, .gain-toast.tone-violet { color: #8b5cf6; }
+.stat-row.tone-calm .icon, .attr-badge.tone-calm, .gain-toast.tone-calm { color: #12a594; }
+.stat-row.tone-money .icon, .attr-badge.tone-money, .gain-toast.tone-money { color: #15883f; }
+.stat-row.tone-hot .icon, .attr-badge.tone-hot, .gain-toast.tone-hot { color: #e5484d; }
 /* 마이너스 통장 — 게임 오버는 아니지만 갚아야 할 빚이라 눈에 띄게 */
 .stat-row.negative b, .stat-row.negative .icon { color: #e5484d; }
 
@@ -495,4 +495,32 @@ body { background: var(--bg); color: var(--text); font-size: var(--fs-sm);
   .stats-strip .stat-row { padding: 7px 11px; }
 
   .profile-banner { height: 8rem; }
+}
+
+/* 반응 게이지 토스트. 누른 자리 근처에 잠깐 떴다 사라진다. */
+.gain-toast {
+  position: fixed; z-index: 60;
+  display: flex; align-items: center; gap: 0.4rem;
+  padding: 0.35rem 0.6rem; border-radius: 999px;
+  background: var(--bg); border: 1px solid var(--line);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+  font-size: var(--fs-xs); white-space: nowrap;
+  pointer-events: none;
+}
+.gain-toast .icon { width: 1.1rem; }
+.gain-bar { display: inline-flex; gap: 0.15rem; }
+.gain-bar .cell {
+  width: 0.7rem; height: 0.3rem; border-radius: 999px;
+  background: var(--line);
+}
+.gain-bar .cell.on { background: currentColor; }
+.gain-label { color: var(--muted); }
+
+/* 5칸이 다 차면 터진다 */
+.gain-toast.leveled { animation: gain-pop 0.4s ease-out; }
+.gain-toast.leveled .gain-label { color: currentColor; font-weight: 700; }
+@keyframes gain-pop {
+  0% { transform: scale(0.8); }
+  45% { transform: scale(1.18); }
+  100% { transform: scale(1); }
 }

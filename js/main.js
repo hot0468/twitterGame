@@ -128,10 +128,13 @@
     }
     var rtDo = e.target.closest("[data-rt-do]");
     if (rtDo) {
-      game.toggleReaction(rtDo.dataset.rtId, "rt");
+      var rtRes = game.toggleReaction(rtDo.dataset.rtId, "rt");
       UI.closeRtMenu();
       save(game.getState());
       refresh();
+      // 렌더 뒤에 띄운다 — 토스트는 피드 바깥(#gain-toast)이라 지워지진 않지만
+      // 배지의 흐려짐과 순서를 맞춘다.
+      if (rtRes) UI.showGain(rtRes.gain, e.clientX, e.clientY);
       return;
     }
     // 메뉴 밖을 눌렀으면 닫는다. 그 클릭의 원래 동작(상세 이동 등)은 이어서 처리한다.
@@ -166,9 +169,10 @@
     }
     var react = e.target.closest("[data-react]");
     if (react) {
-      game.toggleReaction(react.dataset.reactId, react.dataset.react);
+      var res = game.toggleReaction(react.dataset.reactId, react.dataset.react);
       save(game.getState());
       refresh();
+      if (res) UI.showGain(res.gain, e.clientX, e.clientY);
       return;
     }
     var account = e.target.closest("[data-account]");

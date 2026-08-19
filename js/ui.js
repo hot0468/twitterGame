@@ -36,6 +36,9 @@
   // (ui.js는 표기만 담당하고 규칙은 엔진에 있다).
   var ATTR_STAT = { humor: "유머", info: "글빨", daily: "감각", bait: "논란성" };
 
+  // 게이지 칸 수. data/npcs.js의 reaction.perPoint와 같아야 한다(표기용 복제).
+  var GAIN_MAX = 5;
+
   // 실제 트위터처럼 답글은 홈 타임라인에 안 뜬다 — 알림에서 보거나 트윗 상세로 들어가야 한다
   // 정산은 주 1회뿐이고 이 게임의 심장이라 타임라인·알림 양쪽에 남긴다
   // npc = 팔로잉 계정들의 전용 트윗. 타임라인에만 흐르고 알림엔 안 뜬다(남의 트윗이니까)
@@ -778,6 +781,40 @@
         : (npc ? "내 트윗에 답글을 단 적이 없습니다." : "아직 받은 답글이 없습니다."));
   }
 
+  // 반응 게이지 토스트. 누른 자리 근처에 떠서 5칸 중 몇 칸이 찼는지 보여준다.
+  // 게이지를 상시로 두면 화면이 지저분하고, 없으면 진행이 안 보인다 — 누른 순간에만.
+  var gainTimer = null;
+
+  function showGain(gain, x, y) {
+    if (!gain) return; // 이미 센 트윗은 아무 일도 안 일어났으니 띄우지 않는다
+    var el = $("gain-toast");
+    var style = STAT_STYLE[gain.stat] || { icon: "trending-up", tone: "ink" };
+    // leveled면 게이지가 꽉 찬 상태로 보여준다 — count는 이미 0으로 돌아갔다
+    var filled = gain.leveled ? GAIN_MAX : gain.count;
+    var cells = "";
+    for (var i = 0; i < GAIN_MAX; i++)
+      cells += '<span class="cell' + (i < filled ? " on" : "") + '"></span>';
+    el.className = "gain-toast tone-" + style.tone + (gain.leveled ? " leveled" : "");
+    el.innerHTML = Icons.svg(style.icon) +
+      '<span class="gain-bar">' + cells + "</span>" +
+      '<span class="gain-label">' + gain.stat + (gain.leveled ? " +1" : "") + "</span>";
+    el.hidden = false;
+
+    // 위치는 클릭 지점 근처. 화면 밖으로 나가지 않게 안쪽으로 밀어 넣는다.
+    // hidden을 푼 뒤에 재야 offsetWidth가 0이 아니다.
+    var pad = 8, w = el.offsetWidth, h = el.offsetHeight;
+    var left = Math.min(Math.max(pad, x - w / 2), window.innerWidth - w - pad);
+    var top = y - h - 12;
+    if (top < pad) top = y + 20; // 위가 좁으면 아래로 편다
+    el.style.left = left + "px";
+    el.style.top = top + "px";
+
+    // 연타하면 새로 만들지 않고 이 하나를 옮긴다 — 여러 장이 쌓이면 화면을 덮는다.
+    if (gainTimer) clearTimeout(gainTimer);
+    gainTimer = setTimeout(function () { el.hidden = true; },
+      gain.leveled ? 1600 : 1000); // 스탯이 오른 순간은 조금 더 머문다
+  }
+
   function renderAll(state, game) {
     gameNow = game || gameNow;
     reactedNow = state.reacted || {}; // 이 렌더 동안 tweetEl이 참조한다
@@ -966,6 +1003,7 @@
     openSearch: openSearch, closeSearch: closeSearch,
     setSearchQuery: setSearchQuery, setSearchTab: setSearchTab,
     openDm: openDm, dmBack: dmBack, dmOpenHandle: dmOpenHandle,
-    openFollowing: openFollowing, closeFollowing: closeFollowing };
+    openFollowing: openFollowing, closeFollowing: closeFollowing,
+    showGain: showGain };
 })();
 if (typeof module !== "undefined") module.exports = UI;
