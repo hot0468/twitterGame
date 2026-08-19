@@ -602,9 +602,12 @@
       var gain = null;
       // 켤 때만, 그리고 이 트윗을 아직 안 셌을 때만 카운터가 오른다.
       if (r[kind] && !r.gained) {
-        r.gained = true;
         var rules = data.reaction, stat = rules && rules.attrStat[t.attr];
+        // stat을 실제로 셀 수 있을 때만 gained를 찍는다. attrStat에 없는 속성(오타·누락)이면
+        // 찍지 않아야 매핑을 고친 뒤 같은 트윗에 다시 반응해서 셀 수 있다 — 안 그러면
+        // 데이터 오타 하나로 그 트윗이 영영 스탯을 못 주는 채로 세이브에 굳어버린다.
         if (stat) {
+          r.gained = true;
           var n = (state.reactCount[stat] || 0) + 1, leveled = false;
           if (n >= rules.perPoint) {
             n = 0;

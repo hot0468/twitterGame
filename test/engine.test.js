@@ -895,16 +895,24 @@ loadData().npcs.forEach(function (n) {
 console.log("트윗 속성 OK");
 
 // --- 트윗 속성: 계정 기본값과 트윗별 예외 ---
-// 모든 보관함 트윗이 유효한 속성을 갖는다
-var gAttr = Engine.create(loadData());
+// 모든 보관함 트윗이 유효한 속성을 갖는다.
+// startFollowing: 0이라 갓 만든 게임은 보관함이 비어 있다 — 턴을 돌려 채워야 실제로 검증된다
+// (gLen과 같은 패턴: npcSeen을 직접 채우고 advanceTurn을 여러 번 돈다).
+var gAttr = Engine.create(loadData(), null, function () { return 0.5; });
+loadData().npcs.forEach(function (n) { gAttr.getState().npcSeen[n.handle] = 1; });
+for (var tAttr = 0; tAttr < 12; tAttr++) gAttr.advanceTurn("meme", true);
 var sAttr = gAttr.getState();
 var attrStatMap = loadData().reaction.attrStat;
+var checkedAttrTweets = 0;
 Object.keys(sAttr.npcTweets).forEach(function (h) {
   sAttr.npcTweets[h].forEach(function (t) {
     assert.ok(t.attr, h + "의 트윗에 attr이 없다: " + t.text);
     assert.ok(attrStatMap[t.attr], "알 수 없는 attr: " + t.attr);
+    checkedAttrTweets++;
   });
 });
+assert.ok(checkedAttrTweets > 100,
+  "보관함이 실제로 찼는지 확인(공허한 검사 방지): " + checkedAttrTweets + "개");
 
 // 객체 표기 { t, a }가 계정 기본값을 덮어쓴다
 var dOverride = loadData();
@@ -1003,5 +1011,23 @@ Object.keys(savedNoAttr.npcTweets).forEach(function (h) {
 var gNoAttr = Engine.create(reactData("@t_react", "humor", "가"), savedNoAttr);
 var boxNA = gNoAttr.getState().npcTweets["@t_react"];
 assert.strictEqual(boxNA[0].attr, "humor", "옛 세이브 트윗에 계정 기본 속성이 채워진다");
+
+// attrStat에 없는 속성(오타·누락)이면 gain은 null이지만 gained가 찍히면 안 된다 —
+// 매핑을 고친 뒤 같은 트윗에 다시 반응하면 카운터가 올라야 한다(Important 3)
+var dNoMap = reactData("@t_unmapped", "ghost", "다"); // ghost는 attrStat에 없는 카테고리
+var gUnmapped = Engine.create(dNoMap);
+var boxUnmapped = gUnmapped.getState().npcTweets["@t_unmapped"];
+var rUnmapped = gUnmapped.toggleReaction(boxUnmapped[0].id, "like");
+assert.strictEqual(rUnmapped.gain, null, "매핑에 없는 속성은 gain이 null");
+assert.strictEqual(gUnmapped.getState().reacted[boxUnmapped[0].id].gained, undefined,
+  "매핑에 없으면 gained를 찍지 않는다 — 안 찍어야 매핑을 고친 뒤 다시 셀 수 있다");
+
+// 매핑을 고친 뒤(런타임 데이터를 바꾼 것처럼) 같은 트윗에 다시 반응하면 카운터가 오른다.
+// 좋아요는 이미 켜져 있으므로(gained가 안 찍혔을 뿐 on은 true) 리트윗으로 다시 반응해본다.
+dNoMap.reaction.attrStat.ghost = "유머";
+var gFixed = Engine.create(dNoMap, gUnmapped.getState());
+var rFixed = gFixed.toggleReaction(boxUnmapped[0].id, "rt");
+assert.strictEqual(rFixed.gain.stat, "유머", "매핑을 고치면 같은 트윗도 다시 셀 수 있다");
+assert.strictEqual(rFixed.gain.count, 1);
 
 console.log("반응 카운터와 스탯 상승 OK");
