@@ -890,3 +890,30 @@ loadData().npcs.forEach(function (n) {
 });
 
 console.log("트윗 속성 OK");
+
+// --- 트윗 속성: 계정 기본값과 트윗별 예외 ---
+// 모든 보관함 트윗이 유효한 속성을 갖는다
+var gAttr = Engine.create(loadData());
+var sAttr = gAttr.getState();
+var attrStatMap = loadData().reaction.attrStat;
+Object.keys(sAttr.npcTweets).forEach(function (h) {
+  sAttr.npcTweets[h].forEach(function (t) {
+    assert.ok(t.attr, h + "의 트윗에 attr이 없다: " + t.text);
+    assert.ok(attrStatMap[t.attr], "알 수 없는 attr: " + t.attr);
+  });
+});
+
+// 객체 표기 { t, a }가 계정 기본값을 덮어쓴다
+var dOverride = loadData();
+dOverride.npcs = [{ handle: "@t_attr", name: "테스트", bio: "b", followers: 100,
+  reactsTo: ["humor"], replies: ["r"],
+  tweets: [{ t: "떡밥으로 지정한 트윗입니다", a: "bait" }] }];
+dOverride.timeline = Object.assign({}, dOverride.timeline, { startFollowing: 1 });
+var gOv = Engine.create(dOverride);
+var boxOv = gOv.getState().npcTweets["@t_attr"];
+assert.ok(boxOv && boxOv.length, "보관함이 채워져야 한다");
+assert.strictEqual(boxOv[0].attr, "bait", "객체 표기가 계정 기본값(humor)을 덮어쓴다");
+assert.strictEqual(boxOv[0].text, "떡밥으로 지정한 트윗입니다", "text에 표기가 새어나오면 안 된다");
+assert.strictEqual(boxOv[0].src, "떡밥으로 지정한 트윗입니다", "src도 본문 문자열이다");
+
+console.log("트윗 속성 파싱 OK");

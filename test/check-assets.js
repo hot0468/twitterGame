@@ -12,6 +12,9 @@ var gen = data.timeline.gen;
 
 function has(name) { return fs.existsSync(path.join(dir, name + ".svg")); }
 
+// 트윗 항목은 문자열이거나 { t: 본문, a: 속성 } 객체다
+function tweetText(raw) { return typeof raw === "string" ? raw : raw.t; }
+
 // ── 프로필 사진 ──
 assert.ok(has("me"), "me.svg가 없다 — 내 아바타가 전부 깨진다");
 
@@ -52,7 +55,7 @@ assert.strictEqual(silent.length, 0,
 
 var owner = {}, cross = [], lengths = [];
 npcs.forEach(function (n) {
-  var t = n.tweets;
+  var t = n.tweets.map(tweetText);
 
   var short = t.filter(function (x) { return x.length < gen.minLength; });
   assert.strictEqual(short.length, 0, n.handle + ": " + gen.minLength +

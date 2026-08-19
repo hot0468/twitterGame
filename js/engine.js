@@ -293,6 +293,17 @@
     // 길이만 다른 트윗으로 계속 재등장해서 타임라인이 지루해진다(실제로 그랬다).
     // 보관함에 이미 있는 트윗은 후보에서 뺀다 → 한 프로필에 같은 트윗이 두 번 안 뜬다.
     // 그래서 계정의 트윗 수가 max보다 많아야 매일 새 트윗이 나온다(check-assets.js가 검사).
+    // 트윗 데이터는 문자열이거나 { t: 본문, a: 속성 } 객체다.
+    // 객체는 계정 기본 속성과 다르게 잡은 예외를 위한 것이고, 거의 쓰지 않는다.
+    function tweetText(raw) { return typeof raw === "string" ? raw : raw.t; }
+
+    // 속성 결정: 트윗에 지정돼 있으면 그것, 없으면 그 계정의 첫 카테고리.
+    // "계정 하나 = 컨셉 하나"라 계정 카테고리가 기본값인 게 자연스럽다.
+    function tweetAttr(raw, npc) {
+      if (typeof raw !== "string" && raw.a) return raw.a;
+      return npc.reactsTo[0];
+    }
+
     function addTweets(npc, count, dayOf) {
       var gen = genRules();
       var box = state.npcTweets[npc.handle] || (state.npcTweets[npc.handle] = []);
@@ -301,14 +312,17 @@
         // src(치환 전 원문)로 중복을 본다 — text는 {떡밥}이 치환돼 원문과 다르다.
         var used = {};
         box.concat(made).forEach(function (t) { used[t.src || t.text] = true; });
-        var free = npc.tweets.filter(function (t) { return !used[t]; });
+        // 트윗은 문자열이거나 { t, a } 객체다 — 객체는 속성을 계정 기본값과 다르게 잡은 예외다.
+        // 중복 판정은 본문 문자열로 하므로 표기와 무관하게 같은 트윗은 한 번만 나온다.
+        var free = npc.tweets.filter(function (t) { return !used[tweetText(t)]; });
         if (!free.length) break; // 낼 새 트윗이 없으면 그 날은 안 올린다
-        var src = pick(free);
+        var raw = pick(free);
+        var src = tweetText(raw);
         // id는 내 트윗과 같은 seq를 쓴다 — 겹치지 않아야 상세 페이지가 엉키지 않는다.
         // 보관함에만 있는 트윗도 상세로 열 수 있어야 하므로 전부 id를 받는다.
         var t = { id: "tw" + ++state.tweetSeq, src: src,
           author: npc.handle, name: npc.name, kind: "npc",
-          text: fillTemplate(src), day: dayOf(i) };
+          text: fillTemplate(src), day: dayOf(i), attr: tweetAttr(raw, npc) };
         setCounts(t, npc);
         made.push(t);
       }
