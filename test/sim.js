@@ -60,6 +60,31 @@ var strategies = {
   }
 };
 
+// 반응 그라인딩 전략(Critical 2 회귀 테스트). 매 턴 가능한 만큼 남의 트윗에 좋아요를
+// 눌러 dailyCap을 계속 두드린다 — 한도가 없다면 논란성이 폭증해 topStat 엔딩이
+// 전부 막혀야 정상인데, 한도가 있으면 100만에 도달하되 논란성으로 고정되지 않아야 한다.
+// bait(논란성) 트윗도 일부러 안 피한다 — 한도가 논란성 폭주를 막아주는지가 이 시나리오의 핵심.
+function grindReactions(game) {
+  var state = game.getState();
+  var all = [];
+  Object.keys(state.npcTweets).forEach(function (h) {
+    all = all.concat(state.npcTweets[h]);
+  });
+  // 한도(dailyCap)보다 넉넉히 시도한다 — 한도를 넘는 시도가 전부 정상 처리되는지도 같이 본다.
+  for (var i = 0; i < all.length; i++) game.toggleReaction(all[i].id, "like");
+}
+
+strategies["반응그라인딩"] = function (acts, rand, state) {
+  var has = function (id) { return acts.some(function (a) { return a.id === id; }); };
+  var ev = acts.filter(function (a) { return a.kind === "event"; })[0];
+  if (ev) return { id: ev.id, tweet: false };
+  if (state.stats.멘탈 < 20) return { id: "rest", tweet: false };
+  // 성장몰빵과 같은 뼈대(글빨을 쌓고 자료 정리로 환전) — 반응 자체의 효과만 측정하려는 것이라
+  // 행동 선택은 이미 검증된 전략을 그대로 쓴다.
+  var archive = acts.filter(function (a) { return a.id === "archive"; })[0];
+  return archive ? { id: "archive", tweet: true } : { id: "write", tweet: false };
+};
+
 Object.keys(strategies).forEach(function (name, si) {
   var rand = mulberry32(42 + si);
   var game = Engine.create(loadData(), null, rand);
@@ -67,6 +92,9 @@ Object.keys(strategies).forEach(function (name, si) {
   while (!ending && turns < 500) {
     var acts = game.getActions();
     assert.ok(acts.length > 0, name + ": 가능한 행동이 없음");
+    // 반응은 하루를 소모하지 않으므로 advanceTurn 전에 그 날의 반응을 다 눌러본다
+    // (실제 플레이도 이 순서다 — 타임라인을 보다가 반응하고, 그다음 오늘의 행동을 고른다).
+    if (name === "반응그라인딩") grindReactions(game);
     var chosen = strategies[name](acts, rand, game.getState());
     var result = game.advanceTurn(chosen.id, chosen.tweet);
     var st = game.getState();
@@ -81,6 +109,12 @@ Object.keys(strategies).forEach(function (name, si) {
   }
   assert.ok(ending, name + ": 500턴 안에 엔딩 실패 (팔로워 " + game.getState().followers + ")");
   var st = game.getState();
+  if (name === "반응그라인딩") {
+    // dailyCap이 없다면 논란성이 폭증해 사이버렉카(논란성>=50)로 무조건 고정된다(Critical 2 실측).
+    // 한도가 있으면 논란성이 그 정도로 안 쌓여야 하고, topStat 엔딩 3종 중 하나가 나와야 한다.
+    assert.notStrictEqual(ending.id, "cyber_wrecker",
+      "반응그라인딩: dailyCap이 논란성 폭주를 막지 못했다 (논란성 " + st.stats.논란성 + ")");
+  }
   console.log(name + " → " + ending.title + " (" + st.day + "일차, 팔로워 " +
     st.followers.toLocaleString() + ", 돈 " + st.stats.돈.toLocaleString() +
     ", 최저 " + worst.toLocaleString() + ")");
