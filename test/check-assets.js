@@ -53,6 +53,18 @@ var silent = npcs.filter(function (n) { return !n.tweets || !n.tweets.length; })
 assert.strictEqual(silent.length, 0,
   "올릴 트윗이 없는 계정: " + silent.map(function (n) { return n.handle; }).join(", "));
 
+// { t, a } 예외 표기의 a가 attrStat에 없는 값이면(오타·새 카테고리 누락) 그 트윗은
+// toggleReaction에서 gain을 영영 못 만든다(Important 3과 결합해 조용히 트윗을 태운다).
+var attrStatMap = data.reaction.attrStat;
+var badAttr = [];
+npcs.forEach(function (n) {
+  n.tweets.forEach(function (raw) {
+    if (typeof raw !== "string" && !attrStatMap[raw.a])
+      badAttr.push(n.handle + ": 알 수 없는 a(" + raw.a + ") → " + raw.t);
+  });
+});
+assert.strictEqual(badAttr.length, 0, "attrStat에 없는 속성 예외:\n  " + badAttr.join("\n  "));
+
 var owner = {}, cross = [], lengths = [];
 npcs.forEach(function (n) {
   var t = n.tweets.map(tweetText);
