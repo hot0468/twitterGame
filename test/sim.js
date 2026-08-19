@@ -63,15 +63,32 @@ var strategies = {
 // 반응 그라인딩 전략(Critical 2 회귀 테스트). 매 턴 가능한 만큼 남의 트윗에 좋아요를
 // 눌러 dailyCap을 계속 두드린다 — 한도가 없다면 논란성이 폭증해 topStat 엔딩이
 // 전부 막혀야 정상인데, 한도가 있으면 100만에 도달하되 논란성으로 고정되지 않아야 한다.
-// bait(논란성) 트윗도 일부러 안 피한다 — 한도가 논란성 폭주를 막아주는지가 이 시나리오의 핵심.
+//
+// bait 트윗을 **우선** 훑는다 — 떡밥 계정 프로필을 둘러보며 좋아요를 누르는 건 자연스러운
+// 플레이이고, 이 시나리오가 검증해야 할 실제 위험은 "bait를 챙겨 누르면 얼마나 쌓이는가"다.
+// (Object.keys 순회 순서 그대로 훑으면 하루 슬롯이 앞쪽 계정에서 다 소진돼 bait 트윗에
+// 아예 도달하지 못하고, 그러면 이 테스트가 아무 위험도 검증하지 않는 채로 통과해버린다.)
+//
+// 이미 반응(좋아요)한 트윗은 건너뛴다 — toggleReaction은 토글이라 이미 켠 걸 다시 부르면
+// 꺼버린다. 실제 플레이는 한 번 누른 트윗을 다시 눌러 취소하지 않으므로 매 턴 전부를
+// 무조건 다시 호출하면 좋아요 수가 껐다 켰다 진동하는 비현실적인 모델이 된다.
 function grindReactions(game) {
   var state = game.getState();
   var all = [];
   Object.keys(state.npcTweets).forEach(function (h) {
     all = all.concat(state.npcTweets[h]);
   });
+  all.sort(function (a, b) {
+    var aBait = a.attr === "bait" ? 0 : 1;
+    var bBait = b.attr === "bait" ? 0 : 1;
+    return aBait - bBait;
+  });
   // 한도(dailyCap)보다 넉넉히 시도한다 — 한도를 넘는 시도가 전부 정상 처리되는지도 같이 본다.
-  for (var i = 0; i < all.length; i++) game.toggleReaction(all[i].id, "like");
+  for (var i = 0; i < all.length; i++) {
+    var already = state.reacted[all[i].id];
+    if (already && already.like) continue;
+    game.toggleReaction(all[i].id, "like");
+  }
 }
 
 strategies["반응그라인딩"] = function (acts, rand, state) {
@@ -110,7 +127,8 @@ Object.keys(strategies).forEach(function (name, si) {
   assert.ok(ending, name + ": 500턴 안에 엔딩 실패 (팔로워 " + game.getState().followers + ")");
   var st = game.getState();
   if (name === "반응그라인딩") {
-    // dailyCap이 없다면 논란성이 폭증해 사이버렉카(논란성>=50)로 무조건 고정된다(Critical 2 실측).
+    // dailyCap이 없다면 논란성이 폭증해 사이버렉카(논란성>=200)로 무조건 고정된다(실측: bait 우선
+    // 그라인딩은 dailyCap 아래에서 논란성 149 근처가 상한 — 어그로 전략의 740에는 못 미친다).
     // 한도가 있으면 논란성이 그 정도로 안 쌓여야 하고, topStat 엔딩 3종 중 하나가 나와야 한다.
     assert.notStrictEqual(ending.id, "cyber_wrecker",
       "반응그라인딩: dailyCap이 논란성 폭주를 막지 못했다 (논란성 " + st.stats.논란성 + ")");
