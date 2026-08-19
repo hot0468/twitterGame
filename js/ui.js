@@ -794,14 +794,15 @@
     var cells = "";
     for (var i = 0; i < GAIN_MAX; i++)
       cells += '<span class="cell' + (i < filled ? " on" : "") + '"></span>';
+    // hidden 클래스를 className 조립에 포함시켜야 한다 — 통째로 덮어쓰므로
+    // classList.remove만 따로 하면 다음 렌더에서 다시 사라진다.
     el.className = "gain-toast tone-" + style.tone + (gain.leveled ? " leveled" : "");
     el.innerHTML = Icons.svg(style.icon) +
       '<span class="gain-bar">' + cells + "</span>" +
       '<span class="gain-label">' + gain.stat + (gain.leveled ? " +1" : "") + "</span>";
-    el.hidden = false;
 
     // 위치는 클릭 지점 근처. 화면 밖으로 나가지 않게 안쪽으로 밀어 넣는다.
-    // hidden을 푼 뒤에 재야 offsetWidth가 0이 아니다.
+    // className에서 hidden을 뗀 뒤에(위에서 이미 했다) 재야 offsetWidth가 0이 아니다.
     var pad = 8, w = el.offsetWidth, h = el.offsetHeight;
     var left = Math.min(Math.max(pad, x - w / 2), window.innerWidth - w - pad);
     var top = y - h - 12;
@@ -811,7 +812,7 @@
 
     // 연타하면 새로 만들지 않고 이 하나를 옮긴다 — 여러 장이 쌓이면 화면을 덮는다.
     if (gainTimer) clearTimeout(gainTimer);
-    gainTimer = setTimeout(function () { el.hidden = true; },
+    gainTimer = setTimeout(function () { el.classList.add("hidden"); },
       gain.leveled ? 1600 : 1000); // 스탯이 오른 순간은 조금 더 머문다
   }
 
