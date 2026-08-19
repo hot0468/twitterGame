@@ -636,8 +636,15 @@
       if (!def || !st || st.done || st.pending) return [];
       var node = def.nodes[st.node];
       if (!node || !node.choices) return [];
-      return node.choices.map(function (c, i) { return { idx: i, say: c.say }; });
+      // 형식은 getDmChoices와 같은 { idx, label }이다 — 같은 선택지 바에 그려지므로
+      // 다르게 두면 UI가 분기해야 하고, 한쪽만 고치면 버튼이 빈칸으로 나온다(실제로 겪음).
+      return node.choices.map(function (c, i) { return { idx: i, label: c.say }; });
     }
+
+    // 이 계정이 스토리 계정인가. UI가 "선택지가 비었는가"로 판단하면 안 된다 —
+    // 대기·지연 중에도 빈 배열이라, 그걸로 가르면 기존 getDmChoices로 넘어가
+    // accounts에 없는 계정에서 터진다(실제로 겪음).
+    function isStoryAccount(handle) { return !!storyDef(handle); }
 
     // 스토리 선택. 하루를 안 쓰고 스탯도 안 건드린다(기존 DM과 같은 규칙).
     // 다음 노드에 delay가 있으면 그 날짜로 예약만 하고 답장은 나중에 온다.
@@ -779,7 +786,7 @@
       toggleReaction: toggleReaction, toggleFollow: toggleFollow,
       dmAccounts: dmAccounts, getDmChoices: getDmChoices, sendDm: sendDm,
       markDmRead: markDmRead, unreadDms: unreadDms,
-      storyChoices: storyChoices, sendStory: sendStory,
+      storyChoices: storyChoices, sendStory: sendStory, isStoryAccount: isStoryAccount,
       _goStory: goStory,
       _reactionsOn: reactionsOn };
   }

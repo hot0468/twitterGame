@@ -1335,3 +1335,30 @@ assert.strictEqual(gNow.getState().dmStory["@old_records"].node, "s4b",
   "delay 없는 선택지는 즉시 도착");
 
 console.log("이벤트 delay OK");
+
+// --- 선택지 형식이 두 갈래에서 같은가 ---
+// 같은 선택지 바에 그려지므로 형식이 다르면 UI가 분기해야 하고,
+// 한쪽만 고치면 버튼이 빈칸으로 나온다(실제로 겪음).
+var gFmt = storyGame();
+gFmt.advanceTurn("rest", false);
+var fmtStory = gFmt.storyChoices("@old_records");
+assert.ok(fmtStory.length > 0, "s1에 선택지가 있다");
+assert.ok(typeof fmtStory[0].label === "string" && fmtStory[0].label.length > 0,
+  "스토리 선택지는 { idx, label } — label에 글자가 있다");
+assert.strictEqual(fmtStory[0].say, undefined, "say 필드는 쓰지 않는다");
+
+// 기존 DM 선택지도 같은 형식이어야 한다
+var sFmt = gFmt.getState();
+sFmt.npcSeen["@mutuals_only"] = 1;
+gFmt.advanceTurn("rest", false);
+var fmtDm = gFmt.getDmChoices("@mutuals_only");
+assert.ok(fmtDm.length > 0, "기존 계정에 선택지가 있다");
+assert.ok(typeof fmtDm[0].label === "string", "기존 선택지도 { idx, label }");
+
+// 스토리 계정 판별은 엔진이 한다 — UI가 "선택지가 비었는가"로 가르면
+// 대기 중에 기존 getDmChoices로 넘어가 accounts에 없는 계정에서 터진다.
+assert.strictEqual(gFmt.isStoryAccount("@old_records"), true);
+assert.strictEqual(gFmt.isStoryAccount("@mutuals_only"), false);
+assert.strictEqual(gFmt.isStoryAccount("@없는계정"), false);
+
+console.log("선택지 형식 OK");

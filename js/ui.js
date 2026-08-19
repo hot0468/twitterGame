@@ -593,9 +593,12 @@
     // 스토리 계정이면 스토리 선택지를, 아니면 기존 선택지 풀을 쓴다.
     // 대기 중(행동을 기다리는 중)이면 스토리 쪽이 빈 배열을 주고, 그러면 아무것도 안 그린다 —
     // "기다리는 중" 같은 표시를 넣지 말 것. 침묵이 이 이야기의 연출이다.
-    var story = gameNow ? gameNow.storyChoices(dmHandle) : [];
-    var isStory = story.length > 0;
-    var choices = isStory ? story : (gameNow ? gameNow.getDmChoices(dmHandle) : []);
+    // 스토리 계정인지는 엔진에 묻는다. "선택지가 비었는가"로 가르면 안 된다 —
+    // 대기·지연 중에도 빈 배열이라, 그걸로 판단하면 기존 getDmChoices로 넘어가서
+    // accounts에 없는 스토리 계정에서 터진다(실제로 겪음).
+    var isStory = !!(gameNow && gameNow.isStoryAccount(dmHandle));
+    var choices = !gameNow ? []
+      : (isStory ? gameNow.storyChoices(dmHandle) : gameNow.getDmChoices(dmHandle));
     if (!choices.length) {
       // 스토리가 대기·지연 중일 때는 이 침묵 자체가 연출이다 — "더 할 말이…" 문구를 넣지 않는다.
       if (isStory || (gameNow && gameNow.dmAccounts().indexOf(dmHandle) === -1)) return;
@@ -612,8 +615,8 @@
       if (isStory) b.dataset.storyIdx = c.idx;
       else b.dataset.dmSay = c.idx;
       b.dataset.dmTo = dmHandle;
-      // 기존 선택지는 label, 스토리 선택지는 say — 필드 이름이 다르다
-      b.textContent = isStory ? c.say : c.label;
+      // 두 목록 다 { idx, label }이다 — 엔진이 형식을 맞춰준다
+      b.textContent = c.label;
       ch.appendChild(b);
     });
   }
