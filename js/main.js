@@ -176,6 +176,17 @@
       refresh();
       return;
     }
+    // 광고 구매. 버튼이 트윗 안에 있으므로 트윗 상세보다 먼저 잡아야 한다
+    // (반응 버튼·아바타와 같은 함정). 하루를 안 쓰므로 resolveTurn을 거치지 않는다.
+    var buyBtn = e.target.closest("[data-buy]");
+    if (buyBtn) {
+      var bought = game.buyItem(buyBtn.dataset.buy);
+      if (bought) {
+        save(game.getState());
+        refresh();
+      }
+      return;
+    }
     var react = e.target.closest("[data-react]");
     if (react) {
       var res = game.toggleReaction(react.dataset.reactId, react.dataset.react);

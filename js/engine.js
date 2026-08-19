@@ -81,6 +81,9 @@
       // dms: 계정별 대화방 { "@h": { msgs: [{me,text,day}], used: [주제idx], opened: [인사idx], seen: n } }.
       // feed와 별개다 — 실제 X도 DM은 알림이 아니라 자기 뱃지를 쓴다.
       npcTweets: {}, npcSeen: {}, reacted: {}, following: {}, dms: {},
+      // 산 광고 상품 { "keyboard": true }. 상품마다 한 번만 살 수 있고,
+      // 산 것은 광고 후보에서 빠진다 — 반복 구매를 허용하면 "알바 → 구매" 루프가 생긴다.
+      bought: {},
       // 스토리 DM 진행 상태. { "@h": { node, pending: {to, day}|null, done } }
       // 기존 dms(대화 내용)와 별개다 — 저쪽은 말풍선, 이쪽은 어디까지 왔는가다.
       dmStory: {},
@@ -491,6 +494,19 @@
           });
       });
 
+      // 광고. 아직 안 산 상품 중 하나가 타임라인에 흐른다.
+      // 돈이 모자라도 뜬다 — 살 수 있는 것만 보여주면 "나중에 사야지"가 안 되고,
+      // 버튼이 비활성으로 보이는 게 목표가 된다(UI가 그 상태를 그린다).
+      if (data.ads && rand() < (data.ads.chance || 0)) {
+        var canShow = data.ads.items.filter(function (it) { return !state.bought[it.id]; });
+        if (canShow.length) {
+          var ad = pick(canShow);
+          feedItems.push({ author: data.ads.handle, name: data.ads.name,
+            text: ad.text, day: state.day, kind: "ad",
+            adId: ad.id, label: ad.label, price: ad.price, effects: ad.effects });
+        }
+      }
+
       // 디엠 도착. 이미 만난 DM 계정 중 인사말이 남은 곳에서 하루 한 통까지.
       // 팔로우와 무관하다 — 안 팔로우해도 DM은 온다(실제 X와 동일).
       if (data.dm && rand() < (data.dm.chance || 0)) {
@@ -790,6 +806,33 @@
       return { id: tweetId, kind: kind, on: r[kind], gain: gain };
     }
 
+    // 광고 상품 구매. 하루를 안 쓴다 — 반응·팔로우·DM과 같은 부류다.
+    // 상품마다 한 번만 살 수 있고(state.bought), 돈이 모자라면 안 산다.
+    // 돈은 유일하게 음수를 허용하는 스탯이지만 여기서는 빚을 내서 사지 못하게 막는다 —
+    // 광고는 여윳돈으로 사는 물건이고, 빚으로 스탯을 사면 그게 최적 전략이 된다.
+    function buyItem(itemId) {
+      if (!data.ads || !itemId) return null;
+      var item = data.ads.items.filter(function (i) { return i.id === itemId; })[0];
+      if (!item || state.bought[itemId]) return null;
+      if (state.stats.돈 < item.price) return null;
+      state.bought[itemId] = true;
+      var changes = {};
+      applyEffects({ "돈": -item.price }, changes);
+      applyEffects(item.effects, changes);
+      return { id: itemId, label: item.label, price: item.price, statChanges: changes };
+    }
+
+    // 그 상품을 살 수 있는가. UI가 구매 버튼을 비활성으로 그릴 근거다 —
+    // 왜 못 사는지도 같이 알려준다(돈이 모자란 건지 이미 산 건지).
+    function canBuy(itemId) {
+      if (!data.ads || !itemId) return { ok: false, reason: "unknown" };
+      var item = data.ads.items.filter(function (i) { return i.id === itemId; })[0];
+      if (!item) return { ok: false, reason: "unknown" };
+      if (state.bought[itemId]) return { ok: false, reason: "bought" };
+      if (state.stats.돈 < item.price) return { ok: false, reason: "money" };
+      return { ok: true, reason: null };
+    }
+
     // 그 계정 트윗 중 내가 반응해서 카운트된 수. 좋아요·리트윗 합산이고 트윗당 1회다
     // (gained가 그 기준이다 — toggleReaction과 같은 기준을 쓴다).
     // state.reacted엔 트윗 id만 있어서 어느 계정 것인지는 보관함을 봐야 안다.
@@ -810,6 +853,7 @@
       dmAccounts: dmAccounts, getDmChoices: getDmChoices, sendDm: sendDm,
       markDmRead: markDmRead, unreadDms: unreadDms,
       storyChoices: storyChoices, sendStory: sendStory, isStoryAccount: isStoryAccount,
+      buyItem: buyItem, canBuy: canBuy,
       _goStory: goStory,
       _reactionsOn: reactionsOn };
   }

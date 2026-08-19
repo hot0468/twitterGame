@@ -545,3 +545,16 @@ body { background: var(--bg); color: var(--text); font-size: var(--fs-sm);
   45% { transform: scale(1.18); }
   100% { transform: scale(1); }
 }
+
+/* 광고 카드. 실제 X의 프로모션 게시물처럼 "광고" 라벨이 붙는다. */
+.tweet.ad .ad-tag { color: var(--muted); font-size: var(--fs-xs); }
+.ad-buy { display: flex; align-items: center; gap: 8px; margin-top: 9px;
+  padding: 9px 11px; border: 1px solid var(--line); border-radius: 12px; }
+.ad-name { font-weight: 700; font-size: var(--fs-sm); }
+.ad-price { color: var(--muted); font-size: var(--fs-xs); margin-right: auto; }
+.buy-btn { padding: 7px 15px; border: none; border-radius: 999px;
+  background: var(--accent); color: #fff; font-family: inherit;
+  font-size: var(--fs-xs); font-weight: 700; cursor: pointer; white-space: nowrap; }
+.buy-btn:hover:not(:disabled) { background: var(--accent-dark); }
+/* 못 사는 이유(돈 부족·이미 삼)가 버튼 글자에 그대로 나온다 */
+.buy-btn:disabled { background: var(--border); color: var(--muted); cursor: default; }

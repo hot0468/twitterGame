@@ -6,7 +6,11 @@ var path = require("path");
 
 var root = path.join(__dirname, "..");
 var dir = path.join(root, "assets", "avatars");
-var data = require(path.join(root, "data", "npcs.js"));
+// 데이터 파일마다 자기 GAME_DATA를 export하므로(브라우저에선 전역을 공유하지만
+// Node의 require에선 모듈마다 독립이다) 합쳐서 써야 한다 — 다른 테스트들과 같은 방식이다.
+var data = {};
+Object.assign(data, require(path.join(root, "data", "npcs.js")));
+Object.assign(data, require(path.join(root, "data", "ads.js")));   // 광고 계정도 아바타를 쓴다
 var npcs = data.npcs;
 var gen = data.timeline.gen;
 
@@ -45,8 +49,17 @@ assert.strictEqual(missing.length, 0,
   "아바타 없는 계정: " + missing.map(function (n) { return n.handle; }).join(", ") +
   "\n  assets/avatars/README.md의 curl 한 줄로 받으면 된다");
 
+// 광고 계정은 NPC 목록에 없지만 아바타는 쓴다 — 타임라인의 광고 카드에 뜬다.
+// (data/ads.js를 따로 두는 이유는 CLAUDE.md "광고 상품" 참고)
+var adHandle = data.ads && data.ads.handle && data.ads.handle.replace("@", "");
+if (adHandle) {
+  assert.ok(has(adHandle),
+    "광고 계정 아바타가 없다: " + adHandle + ".svg — 광고 카드의 사진이 깨진다");
+}
+
 // 계정을 지웠을 때 쓰이지 않는 사진이 쌓이는 것도 잡아준다
 var used = npcs.map(function (n) { return n.handle.replace("@", "") + ".svg"; }).concat("me.svg");
+if (adHandle) used.push(adHandle + ".svg");
 var orphans = fs.readdirSync(dir).filter(function (f) {
   return f.endsWith(".svg") && used.indexOf(f) === -1;
 });
@@ -130,5 +143,8 @@ buckets.forEach(function (b, i) {
 });
 console.log("  길이 분포 " + buckets.join(" / ") + " (10~42 / 43~75 / 76~107 / 108~140자)");
 var total = npcs.reduce(function (a, n) { return a + n.tweets.length; }, 0);
-console.log("assets OK — 계정 " + npcs.length + "개, 아바타 " + (npcs.length + 1) +
+// 아바타는 실제 파일 수를 센다 — npcs.length + 1로 계산하면 광고 계정처럼
+// NPC 목록 밖에서 쓰는 아바타를 놓친다(위에서 이미 누락·고아 검사는 끝났다)
+var avatarCount = fs.readdirSync(dir).filter(function (f) { return f.endsWith(".svg"); }).length;
+console.log("assets OK — 계정 " + npcs.length + "개, 아바타 " + avatarCount +
   "개, 트윗 " + total + "개 (계정당 " + Math.round(total / npcs.length) + "개)");

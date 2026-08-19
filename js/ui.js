@@ -44,7 +44,7 @@
   // npc = 팔로잉 계정들의 전용 트윗. 타임라인에만 흐르고 알림엔 안 뜬다(남의 트윗이니까)
   // 정산은 타임라인에 없다 — 실제 X도 수익 정산을 타임라인에 띄우지 않는다.
   // 주급날 팝업으로 보고, 기록은 알림에 남는다(NOTIF_KINDS에는 그대로 있다).
-  var TIMELINE_KINDS = ["me", "npc", "event", "system"];
+  var TIMELINE_KINDS = ["me", "npc", "event", "system", "ad"];
   var NOTIF_KINDS = ["like", "retweet", "follow", "reply", "event", "system", "settlement"];
 
   function notifItemsOf(state) {
@@ -264,8 +264,41 @@
     });
   }
 
+  // 광고 카드. 실제 X의 프로모션 게시물처럼 "광고" 라벨이 붙고 구매 버튼이 달린다.
+  // 살 수 없으면 버튼이 비활성이고 이유가 보인다 — 살 수 있는 것만 띄우면
+  // "나중에 사야지"가 안 되고, 비활성 버튼 자체가 목표가 된다.
+  function adEl(item) {
+    var div = document.createElement("div");
+    div.className = "tweet ad";
+    var state = gameNow ? gameNow.canBuy(item.adId) : { ok: false, reason: "unknown" };
+    var label = state.reason === "bought" ? "구매함"
+      : state.reason === "money" ? "돈이 부족합니다" : "구매";
+
+    div.innerHTML =
+      // 광고 계정은 NPC 목록에 없어서 프로필이 없다 — data-account를 안 붙인다.
+      // 붙이면 눌렀을 때 빈 프로필이 열린다.
+      '<div class="avatar">' + pfp(item.author) + "</div>" +
+      '<div class="body">' +
+      '<span class="who"></span> <span class="handle"></span>' +
+      '<span class="ad-tag">광고</span>' +
+      '<div class="text"></div>' +
+      '<div class="ad-buy">' +
+      '<span class="ad-name"></span><span class="ad-price"></span>' +
+      '<button class="buy-btn" data-buy="' + item.adId + '"' +
+      (state.ok ? "" : " disabled") + "></button>" +
+      "</div></div>";
+    div.querySelector(".who").textContent = item.name || item.author;
+    div.querySelector(".handle").textContent = item.author;
+    div.querySelector(".text").textContent = item.text;
+    div.querySelector(".ad-name").textContent = item.label;
+    div.querySelector(".ad-price").textContent = statValue("돈", item.price);
+    div.querySelector(".buy-btn").textContent = label;
+    return div;
+  }
+
   function feedItemEl(item) {
     if (item.kind === "settlement") return settlementEl(item);
+    if (item.kind === "ad") return adEl(item);
     return REACTIONS[item.kind] ? reactionEl(item) : tweetEl(item);
   }
 

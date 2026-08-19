@@ -43,6 +43,7 @@ function loadData() {
   Object.assign(d, require("../data/actions.js"));
   Object.assign(d, require("../data/npcs.js"));
   Object.assign(d, require("../data/dms.js"));
+  Object.assign(d, require("../data/ads.js"));
   Object.assign(d, require("../data/events.js"));
   Object.assign(d, require("../data/endings.js"));
   return d;
@@ -243,9 +244,10 @@ var r2 = g5.advanceTurn("meme", false);
 assert.strictEqual(g5.getState().day, 2, "트윗 안 해도 하루는 지난다");
 assert.strictEqual(g5.getState().stats.유머, 7, "행동 효과는 트윗 여부와 무관");
 assert.strictEqual(g5.getState().followers, 10, "트윗 안 하면 팔로워 불변");
+// NPC 트윗과 광고는 나와 무관하게 흐르므로 뺀다 — 이 단언이 재는 건 "내 흔적"이다
 assert.strictEqual(r2.feedItems.filter(function (f) {
-  return f.kind !== "npc";
-}).length, 0, "트윗 안 하면 내 흔적은 피드에 안 남는다 (NPC 트윗은 계속 흐른다)");
+  return f.kind !== "npc" && f.kind !== "ad";
+}).length, 0, "트윗 안 하면 내 흔적은 피드에 안 남는다 (NPC 트윗·광고는 계속 흐른다)");
 assert.strictEqual(g5.getState().tweetLog.length, 0);
 
 // 리스크는 트윗 쪽에만 있다 (떡밥: 논란성 +5, 멘탈 -5)
@@ -1534,3 +1536,79 @@ for (var tE = 0; tE < 10; tE++) gEndB.advanceTurn("rest", false);
 assert.strictEqual(gEndB.getState().stats.감각, senseAfter, "턴을 돌려도 보상이 다시 안 들어온다");
 
 console.log("괴담계 결말 보상 OK");
+
+// --- 광고 상품 구매 ---
+// 하루를 안 쓰고, 상품마다 한 번만 살 수 있고, 빚을 내서는 못 산다.
+var adsData = loadData().ads;
+assert.ok(adsData && adsData.items.length > 0, "광고 데이터가 있다");
+
+// 광고가 타임라인에 뜬다
+var gAd = Engine.create(loadData());
+var adSeen = null;
+for (var tA = 0; tA < 200 && !adSeen; tA++) {
+  gAd.advanceTurn("rest", false).feedItems.forEach(function (f) {
+    if (f.kind === "ad") adSeen = f;
+  });
+}
+assert.ok(adSeen, "광고가 타임라인에 뜬다");
+assert.ok(adSeen.adId && adSeen.price > 0 && adSeen.effects, "광고에 필요한 필드가 다 있다");
+assert.strictEqual(adSeen.author, adsData.handle, "광고 계정 핸들이 붙는다");
+
+// 돈이 모자라면 못 산다
+var gPoorAd = Engine.create(loadData());
+gPoorAd.getState().stats.돈 = 1000;
+var cheapest = adsData.items.reduce(function (a, b) { return b.price < a.price ? b : a; });
+assert.strictEqual(gPoorAd.canBuy(cheapest.id).reason, "money", "돈 부족이 이유로 나온다");
+assert.strictEqual(gPoorAd.buyItem(cheapest.id), null, "돈이 모자라면 못 산다");
+assert.strictEqual(gPoorAd.getState().stats.돈, 1000, "실패해도 돈이 안 빠진다");
+
+// 돈이 있으면 사고 스탯이 오른다
+var gBuy = Engine.create(loadData());
+gBuy.getState().stats.돈 = 9000000;
+var item0 = adsData.items[0];
+var beforeBuy = Object.assign({}, gBuy.getState().stats);
+var dayBuy = gBuy.getState().day;
+var boughtRes = gBuy.buyItem(item0.id);
+assert.ok(boughtRes, "구매 성공");
+assert.strictEqual(gBuy.getState().stats.돈, beforeBuy.돈 - item0.price, "가격만큼 빠진다");
+Object.keys(item0.effects).forEach(function (k) {
+  assert.strictEqual(gBuy.getState().stats[k], beforeBuy[k] + item0.effects[k],
+    k + "가 " + item0.effects[k] + "만큼 오른다");
+});
+assert.strictEqual(gBuy.getState().day, dayBuy, "구매는 하루를 안 쓴다");
+
+// 같은 상품을 두 번 못 산다
+var afterBuy = Object.assign({}, gBuy.getState().stats);
+assert.strictEqual(gBuy.buyItem(item0.id), null, "두 번째 구매는 막힌다");
+assert.deepStrictEqual(gBuy.getState().stats, afterBuy, "스탯도 돈도 안 변한다");
+assert.strictEqual(gBuy.canBuy(item0.id).reason, "bought", "이미 샀다고 알려준다");
+
+// 빚을 내서는 못 산다 — 돈은 음수를 허용하는 스탯이지만 광고는 여윳돈으로 사는 물건이다
+var gDebtAd = Engine.create(loadData());
+gDebtAd.getState().stats.돈 = -50000;
+assert.strictEqual(gDebtAd.buyItem(item0.id), null, "돈이 마이너스면 못 산다");
+
+// 전부 사면 광고가 안 뜬다
+var gAllAd = Engine.create(loadData());
+gAllAd.getState().stats.돈 = 99999999;
+adsData.items.forEach(function (it) { gAllAd.buyItem(it.id); });
+var adsAfterAll = 0;
+for (var tB = 0; tB < 100; tB++) {
+  gAllAd.advanceTurn("rest", false).feedItems.forEach(function (f) {
+    if (f.kind === "ad") adsAfterAll++;
+  });
+}
+assert.strictEqual(adsAfterAll, 0, "살 게 없으면 광고가 안 뜬다");
+
+// 모르는 입력은 null
+assert.strictEqual(gBuy.buyItem("없는물건"), null);
+assert.strictEqual(gBuy.buyItem(null), null);
+assert.strictEqual(gBuy.canBuy("없는물건").reason, "unknown");
+
+// 옛 세이브에 bought가 없어도 동작한다
+var savedNoBought = JSON.parse(JSON.stringify(gBuy.getState()));
+delete savedNoBought.bought;
+var gOldAd = Engine.create(loadData(), savedNoBought);
+assert.ok(gOldAd.getState().bought, "bought가 채워진다");
+
+console.log("광고 상품 OK");
