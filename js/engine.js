@@ -69,7 +69,8 @@
       notifSeen: 0,
       // npcTweets: 계정별 트윗 보관함 { "@handle": [트윗] }. 그 계정의 프로필이 이걸 그린다.
       // npcSeen: 그 계정을 처음 본 날 { "@handle": day }. 보관함이 이 날부터 자란다.
-      // reacted: 내가 좋아요·리트윗한 남의 트윗 { "tw12": { like: true, rt: true } }.
+      // reacted: 내가 좋아요·리트윗한 남의 트윗 { "tw12": { like: true, rt: true, gained: true, rtDay: n } }.
+      // gained: 이 트윗이 이미 반응 스탯을 줬는지. 취소·재반응으로 무한히 스탯을 뽑는 걸 막는다.
       // following: 내가 팔로우한 계정 { "@handle": true }. 발견(npcSeen)과 별개다 —
       // 만난 계정이라도 팔로우해야 그 트윗이 홈 타임라인에 흐른다.
       // dms: 계정별 대화방 { "@h": { msgs: [{me,text,day}], used: [주제idx], opened: [인사idx], seen: n } }.
