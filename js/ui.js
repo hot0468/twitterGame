@@ -126,13 +126,26 @@
   function rtMenuOpen() { return rtMenuFor; }
 
   // 실제 X처럼 리트윗 버튼은 바로 토글하지 않고 메뉴를 연다.
-  // "인용하세요"는 넣지 않았다 — 인용은 내 트윗을 새로 쓰는 일이라 하루를 소모하는
-  // 별개의 행동이고 지금은 그 경로가 없다. 모양만 있는 항목은 넣지 않는다.
+  // 재게시는 하루를 안 쓰지만 **인용은 하루를 쓴다** — 내 트윗을 새로 쓰는 일이기 때문이다.
+  // 그래서 인용은 바로 실행하지 않고 확인 팝업(#quote-modal)을 거친다.
   function rtMenu(id, on) {
     return '<div class="rt-menu" role="menu">' +
       '<button class="menu-item" role="menuitem" data-rt-do="1" data-rt-id="' + id + '">' +
-      Icons.svg("repeat-2") + "<span>" + (on ? "재게시 취소" : "재게시") +
-      "</span></button></div>";
+      Icons.svg("repeat-2") + "<span>" + (on ? "재게시 취소" : "재게시") + "</span></button>" +
+      '<button class="menu-item" role="menuitem" data-quote="' + id + '">' +
+      Icons.svg("pen-line") + "<span>인용하기</span></button></div>";
+  }
+
+  // 내 트윗의 ⋯ 메뉴. 지금은 삭제 하나뿐이다.
+  // 리트윗 메뉴와 같은 방식으로 한 번에 하나만 열린다.
+  var myMenuFor = null;
+  function toggleMyMenu(id) { myMenuFor = myMenuFor === id ? null : id; }
+  function closeMyMenu() { var was = myMenuFor !== null; myMenuFor = null; return was; }
+
+  function myMenu(id) {
+    return '<div class="rt-menu" role="menu">' +
+      '<button class="menu-item danger" role="menuitem" data-del="' + id + '">' +
+      Icons.svg("trash-2") + "<span>삭제</span></button></div>";
   }
 
   // 내가 누른 반응. renderAll이 매 렌더 시작에 채운다 — tweetEl까지 인자로 흘리면
@@ -189,6 +202,24 @@
     var metrics = item.kind === "me"
       ? metricEl("heart", item.likes) + metricEl("repeat-2", item.rts) + metricEl("chart-column", item.views)
       : "";
+    // 내 트윗에만 ⋯ 메뉴가 붙는다(삭제). 남의 트윗은 지울 수 없다.
+    // 이벤트·시스템 항목은 id가 없어서 자동으로 제외된다.
+    var mine = item.kind === "me" && item.id;
+    var myMenuOpen = mine && myMenuFor === item.id;
+    var moreBtn = mine
+      ? '<div class="more-wrap"><button class="more-btn" data-more="' + item.id +
+        '" aria-haspopup="menu" aria-expanded="' + (myMenuOpen ? "true" : "false") +
+        '" title="더보기">' + Icons.svg("ellipsis") + "</button>" +
+        (myMenuOpen ? myMenu(item.id) : "") + "</div>"
+      : "";
+    // 인용 카드. 원본을 박스로 감싸 안에 그린다(실제 X와 동일).
+    // 트윗을 만들 때 떠둔 사본을 쓰므로 원본이 보관함에서 밀려나도 남는다.
+    var quoted = item.quoted
+      ? '<div class="quoted" data-detail="' + item.quoted.id + '">' +
+        '<span class="q-who"></span> <span class="q-handle"></span>' +
+        '<span class="stamp">· ' + shortDate(item.quoted.day) + "</span>" +
+        '<div class="q-text"></div></div>'
+      : "";
     // 속성 배지: 무엇이 오를지 누르기 전에 보인다.
     // 날짜는 이름·핸들 옆에 둔다(실제 X 구조). .meta에는 내 트윗의 수치만 남는다.
     div.innerHTML =
@@ -196,12 +227,18 @@
       '<div class="body">' + rtLabel + attrBadge(item) +
       '<span class="who"></span> <span class="handle"></span>' +
       '<span class="stamp">· ' + shortDate(item.day) + "</span>" +
-      '<div class="text"></div>' +
+      '<div class="text"></div>' + quoted +
       (metrics ? '<div class="meta">' + metrics + "</div>" : "") +
-      reactRow(item) + "</div>";
+      reactRow(item) + "</div>" + moreBtn;
     div.querySelector(".who").textContent = who;
     div.querySelector(".handle").textContent = handle;
     div.querySelector(".text").textContent = item.text;
+    if (item.quoted) {
+      var qn = npcByHandle(item.quoted.author);
+      div.querySelector(".q-who").textContent = qn ? qn.name : item.quoted.author;
+      div.querySelector(".q-handle").textContent = item.quoted.author;
+      div.querySelector(".q-text").textContent = item.quoted.text;
+    }
     return div;
   }
 
@@ -1055,7 +1092,34 @@
     $("tweet-modal").classList.remove("hidden");
   }
 
-  function closeTweetPrompt() { $("tweet-modal").classList.add("hidden"); }
+  // 인용 확인. #tweet-modal을 그대로 재사용한다 — 모양이 같은(미리보기 + 두 버튼)
+  // 팝업을 하나 더 만들면 딤팝업이 다섯 개가 되고 CSS도 같이 갈라진다.
+  // 버튼 문구만 갈아끼우고, 닫을 때 openTweetPrompt가 원래대로 되돌린다.
+  function openQuotePrompt(preview) {
+    var who = preview.author;
+    var npc = npcByHandle(who);
+    $("tweet-title").textContent = (npc ? npc.name : who) + " 님의 트윗을 인용할까?";
+    $("tweet-preview").innerHTML =
+      '<div class="preview-row"><span class="preview-label">원문</span><b class="src"></b></div>' +
+      '<div class="preview-row"><span class="preview-label">인용하면</span><b class="post"></b></div>';
+    // 원문이 길면 타이틀보다 커진다 — 한 줄로 줄여 보여준다
+    var src = preview.text.replace(/\n/g, " ");
+    if (src.length > 40) src = src.slice(0, 40) + "…";
+    $("tweet-preview").querySelector(".src").textContent = src;
+    $("tweet-preview").querySelector(".post").textContent =
+      effectsText(preview.effects) || "변화 없음";
+    $("tweet-post").textContent = "인용한다";
+    $("tweet-skip").textContent = "관둔다";
+    $("tweet-modal").classList.remove("hidden");
+  }
+
+  function closeTweetPrompt() {
+    $("tweet-modal").classList.add("hidden");
+    // 인용으로 갈아끼웠던 버튼 문구를 되돌린다. 안 하면 다음 행동 팝업에
+    // "인용한다"가 그대로 남는다.
+    $("tweet-post").textContent = "트윗한다";
+    $("tweet-skip").textContent = "안 올린다";
+  }
 
   // 주급날 딤팝업. 날짜 전환은 조용히 넘어가고 정산일에만 이걸 띄운다 — 주 1회뿐이라
   // 자동으로 닫지 않는다(읽어야 하는 정보다). 확인 버튼이나 딤을 누르면 onDone.
@@ -1129,6 +1193,8 @@
 
   return { renderAll: renderAll, showActions: showActions, hideActions: hideActions,
     openTweetPrompt: openTweetPrompt, closeTweetPrompt: closeTweetPrompt,
+    openQuotePrompt: openQuotePrompt,
+    toggleMyMenu: toggleMyMenu, closeMyMenu: closeMyMenu,
     showSettlement: showSettlement, dateLabel: dateLabel,
     animateLatestMetrics: animateLatestMetrics,
     showEnding: showEnding, switchView: switchView,

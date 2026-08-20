@@ -24,6 +24,7 @@ html { font-size: 81.25%; scrollbar-gutter: stable; } /* 1rem = 13px */
   --hover: #f7f9f9;
   --accent: #1d9bf0;
   --accent-dark: #1a8cd8;
+  --danger: #e5484d;    /* 삭제처럼 되돌릴 수 없는 동작. tone-hot과 같은 값이다 */
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -224,6 +225,30 @@ body { background: var(--bg); color: var(--text); font-size: var(--fs-sm);
 .rt-menu { position: absolute; left: 0; top: 100%; margin-top: 6px; z-index: 10;
   min-width: 10rem; padding: 6px 0; background: var(--bg); border-radius: 14px;
   box-shadow: 0 0 12px rgba(15, 20, 25, 0.18), 0 0 4px rgba(15, 20, 25, 0.08); }
+
+/* 인용 카드. 원본 트윗을 박스로 감싸 내 트윗 안에 그린다(실제 X와 동일).
+   .tweet 안에 중첩되므로 글씨는 한 단계 작게 — 안 그러면 원본이 내 글보다 커 보인다. */
+.quoted { margin: 8px 0 4px; padding: 9px 11px; border: 1px solid var(--line);
+  border-radius: 14px; cursor: pointer; }
+.quoted:hover { background: var(--hover); }
+.quoted .q-who { font-weight: 700; font-size: var(--fs-sm); }
+.quoted .q-handle { color: var(--muted); font-size: var(--fs-xs); }
+.quoted .q-text { margin-top: 3px; font-size: var(--fs-sm); line-height: 1.4;
+  white-space: pre-wrap; word-break: break-word; }
+
+/* 내 트윗의 ⋯ 버튼. .tweet .body가 position: relative라 그 우상단에 붙는다.
+   남의 트윗 속성 배지(.attr-badge)와 같은 자리를 쓰지만 서로 다른 트윗에만 나타나서
+   겹치지 않는다(배지는 kind "npc", 이건 kind "me"). */
+.more-wrap { position: absolute; top: 0; right: 0; }
+.more-btn { display: flex; padding: 3px; background: none; border: none; cursor: pointer;
+  color: var(--muted); border-radius: 50%; }
+.more-btn:hover { background: var(--hover); color: var(--accent); }
+.more-btn .icon { width: 1.15rem; }
+/* 이 메뉴는 우상단에서 열리므로 오른쪽 정렬이다(리트윗 메뉴는 왼쪽) */
+.more-wrap .rt-menu { left: auto; right: 0; }
+
+/* 되돌릴 수 없는 항목. 로그아웃과 같은 위계다 */
+.menu-item.danger { color: var(--danger); }
 
 /* ── 트윗 상세 ─────────────────────────────────── */
 .detail-head { display: flex; align-items: center; gap: 14px; padding: 8px 14px;

@@ -1612,3 +1612,122 @@ var gOldAd = Engine.create(loadData(), savedNoBought);
 assert.ok(gOldAd.getState().bought, "bought가 채워진다");
 
 console.log("광고 상품 OK");
+
+// ── 인용 트윗 ──────────────────────────────────────────────────
+// 인용은 좋아요·리트윗과 달리 **하루를 쓴다** — 내 트윗을 새로 쓰는 일이기 때문이다.
+// 그래서 advanceTurn 안의 분기이고, 정산·이벤트·엔딩 판정을 그대로 지나가야 한다.
+function seedGame(turns, rngVal) {
+  var g = Engine.create(loadData(), null, rngVal == null ? undefined : function () { return rngVal; });
+  for (var i = 0; i < turns; i++) {
+    var acts = g.getActions();
+    g.advanceTurn(acts[i % acts.length].id, true);
+  }
+  return g;
+}
+
+// 보관함에서 특정 속성의 남의 트윗 하나를 찾는다
+function findAttr(state, attr) {
+  var found = null;
+  Object.keys(state.npcTweets).forEach(function (h) {
+    (state.npcTweets[h] || []).forEach(function (t) {
+      if (!found && (attr == null || t.attr === attr)) found = t;
+    });
+  });
+  return found;
+}
+
+var gQ = seedGame(14);
+var qTarget = findAttr(gQ.getState(), "bait") || findAttr(gQ.getState(), null);
+assert.ok(qTarget, "인용할 남의 트윗을 찾았다");
+assert.ok(gQ.canQuote(qTarget.id), "남의 트윗은 인용할 수 있다");
+
+// 미리보기와 실제가 어긋나면 팝업이 거짓말을 한다(previewAction과 같은 규칙)
+var qPreview = gQ.previewQuote(qTarget.id);
+assert.ok(qPreview, "previewQuote가 값을 준다");
+var dayBeforeQ = gQ.getState().day;
+var qRes = gQ.advanceTurn("quote:" + qTarget.id, true);
+assert.strictEqual(gQ.getState().day, dayBeforeQ + 1, "인용은 하루를 쓴다");
+Object.keys(qPreview.effects).forEach(function (k) {
+  assert.strictEqual(qRes.statChanges[k], qPreview.effects[k],
+    "인용 미리보기와 실제가 같다: " + k);
+});
+
+// 인용 트윗은 내 트윗으로 남고 원본 사본을 들고 있다 —
+// 원본이 보관함에서 밀려나도 내 인용 카드는 남아야 하기 때문이다.
+var qLog = gQ.getState().tweetLog;
+var qMade = qLog[qLog.length - 1];
+assert.strictEqual(qMade.kind, "me", "인용은 내 트윗이다");
+assert.ok(qMade.quoted, "원본 사본을 들고 있다");
+assert.strictEqual(qMade.quoted.id, qTarget.id);
+assert.strictEqual(qMade.quoted.text, qTarget.text);
+assert.ok(qMade.views > 0, "조회수가 붙는다 — 정산 대상이다");
+
+// bait 인용은 논란성을 올린다. 이게 "저격"의 대가다.
+var gBait = seedGame(14);
+var baitT = findAttr(gBait.getState(), "bait");
+if (baitT) {
+  var moodBefore = gBait.getState().stats.논란성;
+  gBait.advanceTurn("quote:" + baitT.id, true);
+  assert.ok(gBait.getState().stats.논란성 > moodBefore,
+    "떡밥 트윗을 인용하면 논란성이 오른다");
+}
+
+// 인용 대상이 아닌 것
+assert.strictEqual(gQ.canQuote("없는id"), false, "없는 id는 인용 불가");
+assert.strictEqual(gQ.canQuote(null), false, "null은 인용 불가");
+assert.strictEqual(gQ.previewQuote("없는id"), null);
+// 없는 트윗을 인용해도 터지지 않는다(하루는 가지만 트윗은 안 생긴다)
+var logLenBefore = gQ.getState().tweetLog.length;
+gQ.advanceTurn("quote:없는id", true);
+assert.strictEqual(gQ.getState().tweetLog.length, logLenBefore,
+  "없는 트윗을 인용하면 트윗이 안 생긴다");
+
+console.log("인용 트윗 OK");
+
+// ── 트윗 삭제 ──────────────────────────────────────────────────
+// 삭제는 하루를 **안** 쓴다(반응·팔로우·디엠과 같은 부류).
+// rng를 0.9로 고정해 박제가 안 터지는 경우를 먼저 본다.
+var gDel = seedGame(10, 0.9);
+var delState = gDel.getState();
+delState.stats.논란성 = 30;   // 0이면 clamp에 걸려 감소를 못 잰다
+var delTarget = delState.tweetLog[0];
+var dayBeforeDel = delState.day;
+var logBefore = delState.tweetLog.length;
+var viewsBefore = delState.tweetLog.reduce(function (a, t) { return a + (t.views || 0); }, 0);
+
+var delRes = gDel.deleteTweet(delTarget.id);
+assert.ok(delRes, "삭제가 결과를 준다");
+assert.strictEqual(gDel.getState().day, dayBeforeDel, "삭제는 하루를 안 쓴다");
+assert.strictEqual(gDel.getState().tweetLog.length, logBefore - 1, "tweetLog에서 빠진다");
+assert.strictEqual(delRes.busted, false, "rng 0.9면 박제가 안 된다");
+assert.strictEqual(gDel.getState().stats.논란성, 25, "지우면 논란성이 내려간다");
+
+// 조회수가 정산에서 빠지는가 — 정산은 tweetLog를 훑으므로 자동으로 그래야 한다.
+// 여기서 어긋나면 지운 트윗으로 계속 돈을 버는 셈이 된다.
+var viewsAfter = gDel.getState().tweetLog.reduce(function (a, t) { return a + (t.views || 0); }, 0);
+assert.strictEqual(viewsBefore - viewsAfter, delRes.views,
+  "지운 트윗의 조회수가 정산 대상에서 빠진다");
+
+// 피드에서도 사라지고, 그 트윗에 달린 답글도 같이 사라진다
+assert.ok(!gDel.getState().feed.some(function (f) { return f.id === delTarget.id; }),
+  "피드에서도 사라진다");
+assert.ok(!gDel.getState().feed.some(function (f) { return f.replyTo === delTarget.id; }),
+  "그 트윗의 답글도 같이 사라진다 — 원본 없는 유령 스레드가 남으면 안 된다");
+
+// 박제: rng를 0.01로 고정하면 터진다. 지운 것보다 논란성이 더 오른다 —
+// 이게 없으면 삭제가 순수한 이득이라 그냥 눌러야 하는 버튼이 된다.
+var gBust = seedGame(10, 0.01);
+gBust.getState().stats.논란성 = 30;
+var bustTarget = gBust.getState().tweetLog[0];
+var bustRes = gBust.deleteTweet(bustTarget.id);
+assert.strictEqual(bustRes.busted, true, "rng 0.01이면 박제된다");
+assert.ok(gBust.getState().stats.논란성 > 30,
+  "박제되면 지우기 전보다 논란성이 높다 (-5 뒤 +10)");
+
+// 모르는 입력은 null
+assert.strictEqual(gDel.deleteTweet("없는id"), null);
+assert.strictEqual(gDel.deleteTweet(null), null);
+// 남의 트윗은 못 지운다(tweetLog에 없다)
+assert.strictEqual(gDel.deleteTweet(qTarget.id), null, "남의 트윗은 못 지운다");
+
+console.log("트윗 삭제 OK");

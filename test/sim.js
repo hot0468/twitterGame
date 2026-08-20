@@ -125,18 +125,48 @@ strategies["반응그라인딩"] = function (acts, rand, state) {
   return archive ? { id: "archive", tweet: true } : { id: "write", tweet: false };
 };
 
+// 인용저격 — 떡밥(bait) 트윗을 골라 인용한다. 논란성이 가장 빨리 쌓이는 경로다.
+//
+// 인용은 하루를 쓰므로 그 턴의 행동을 대신한다(반응 그라인딩과 다른 점이다 —
+// 저쪽은 하루를 안 써서 행동과 별개로 굴러간다).
+// bait 트윗이 보관함에 없으면 성장몰빵과 같은 뼈대로 굴러간다.
+strategies["인용저격"] = function (acts, rand, state, game) {
+  var ev = acts.filter(function (a) { return a.kind === "event"; })[0];
+  if (ev) return { id: ev.id, tweet: false };
+  if (state.stats.멘탈 < 20) return { id: "rest", tweet: false };
+
+  // 아직 인용하지 않은 bait 트윗을 찾는다. 같은 트윗을 두 번 인용해도 게임은
+  // 막지 않지만(인용은 몇 번이든 할 수 있다) 실제 플레이에 가깝게 새 것을 고른다.
+  var pick = null;
+  Object.keys(state.npcTweets).forEach(function (h) {
+    (state.npcTweets[h] || []).forEach(function (t) {
+      if (!pick && t.attr === "bait" && !quoted[t.id]) pick = t;
+    });
+  });
+  if (pick) { quoted[pick.id] = true; return { id: "quote:" + pick.id, tweet: true }; }
+
+  // bait 트윗이 아직 없으면(초반엔 계정을 아무도 못 만나서 그렇다) 트윗을 올려
+  // 반응을 받아 계정을 만난다. tweet: false로 두면 영원히 아무도 못 만나서
+  // 인용할 거리가 생기지 않는다 — 팔로워 10에 묶인 채 생활비만 나간다(실측).
+  var archive = acts.filter(function (a) { return a.id === "archive"; })[0];
+  return archive ? { id: "archive", tweet: true } : { id: "write", tweet: true };
+};
+// 인용한 트윗 기록. 전략 함수 바깥에 두는 이유는 매 턴 새로 불리기 때문이다.
+var quoted = {};
+
 Object.keys(strategies).forEach(function (name, si) {
   var rand = mulberry32(42 + si);
   var data = loadData();
   var game = Engine.create(data, null, rand);
   var ending = null, turns = 0, worst = 0;
+  quoted = {};   // 전략마다 새로 시작한다
   while (!ending && turns < 500) {
     var acts = game.getActions();
     assert.ok(acts.length > 0, name + ": 가능한 행동이 없음");
     // 반응은 하루를 소모하지 않으므로 advanceTurn 전에 그 날의 반응을 다 눌러본다
     // (실제 플레이도 이 순서다 — 타임라인을 보다가 반응하고, 그다음 오늘의 행동을 고른다).
     if (name === "반응그라인딩") grindReactions(game, data.reaction.dailyCap);
-    var chosen = strategies[name](acts, rand, game.getState());
+    var chosen = strategies[name](acts, rand, game.getState(), game);
     var result = game.advanceTurn(chosen.id, chosen.tweet);
     var st = game.getState();
     Object.keys(st.stats).forEach(function (k) {
@@ -160,6 +190,17 @@ Object.keys(strategies).forEach(function (name, si) {
     // 여기 아래 단언은 "그 결과로 사이버렉카에 안 걸린다"는 결과만 재확인한다.
     assert.notStrictEqual(ending.id, "cyber_wrecker",
       "반응그라인딩: 논란성이 사이버렉카 임계값까지 쌓였다 (논란성 " + st.stats.논란성 + ")");
+  }
+  if (name === "인용저격") {
+    // bait 인용은 논란성 +8이다. 이 값이 게임을 망가뜨리지 않는지 여기서 잰다.
+    //
+    // 아래가 아니라 위로만 재는 이유: 인용저격은 사이버렉카에 **닿아도 된다**.
+    // 오히려 그게 의도된 경로다(떡밥을 계속 저격하면 그렇게 되는 게 맞다).
+    // 다만 반응 그라인딩(233)보다는 확실히 높아야 한다 — 안 그러면 하루를 쓰는
+    // 인용이 하루를 안 쓰는 좋아요보다 논란성이 안 쌓인다는 뜻이라 저격이 무의미해진다.
+    assert.ok(st.stats.논란성 > 233,
+      "인용저격: 논란성이 반응 그라인딩(233)보다 낮다 — bait 인용 수치가 너무 약하다 (논란성 " +
+      st.stats.논란성 + ")");
   }
   console.log(name + " → " + ending.title + " (" + st.day + "일차, 팔로워 " +
     st.followers.toLocaleString() + ", 돈 " + st.stats.돈.toLocaleString() +

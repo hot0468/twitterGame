@@ -419,6 +419,36 @@
           ae.stage = choice.next;
           pushEventFeed(ev, ae.stage, feedItems);
         }
+      } else if (actionId.indexOf("quote:") === 0) {
+        // 인용. 좋아요·리트윗과 달리 하루를 쓴다 — 내 트윗을 새로 쓰는 일이기 때문이다.
+        // 그래서 별도 경로가 아니라 advanceTurn 안의 분기다. 이 아래 정산·이벤트·엔딩
+        // 판정을 그대로 지나가야 한다(따로 만들면 그 전부를 복제하게 된다).
+        var qt = findNpcTweet(actionId.slice(6));
+        if (qt) {
+          var qrules = data.quote || {};
+          var qeff = (qrules.byAttr && qrules.byAttr[qt.attr]) || qrules.fallback;
+          applyEffects(qeff, statChanges);
+          tweetCategory = qt.attr;
+          // 팔로워 변동이 적용된 뒤에 반응을 잰다(일반 트윗과 같은 순서)
+          var qeng = engagement();
+          var qtweet = {
+            id: "tw" + ++state.tweetSeq,
+            author: "me", text: "", day: state.day,
+            likes: qeng.likes, rts: qeng.rts, views: qeng.views, kind: "me",
+            // 인용한 원본. 렌더는 이 사본을 그린다 — 원본이 보관함에서 밀려나도
+            // 내 인용 카드는 남아야 하기 때문이다(id만 들고 있으면 빈 카드가 된다).
+            quoted: { id: qt.id, author: qt.author, text: qt.text, day: qt.day }
+          };
+          feedItems.push(qtweet);
+          state.tweetLog.push(qtweet);
+          if (qeng.likes > 0) {
+            feedItems.push(reactionNotif("like", qt.attr,
+              qeng.likes <= 2 ? qeng.likes : 1, qeng.likes, qt.text));
+          }
+          if (qeng.rts > 0) {
+            feedItems.push(reactionNotif("retweet", qt.attr, 1, qeng.rts, qt.text));
+          }
+        }
       } else {
         var action = data.actions.filter(function (a) { return a.id === actionId; })[0];
         if (action) {
@@ -756,6 +786,56 @@
       return found;
     }
 
+    // 인용할 수 있는 트윗인가. 남의 트윗(kind "npc")이고 id가 있어야 한다 —
+    // 답글은 자기 id가 없고(replyTo만 있다) 내 트윗은 인용 대상이 아니다.
+    function canQuote(tweetId) { return !!(tweetId && findNpcTweet(tweetId)); }
+
+    // 인용 미리보기. previewAction과 같은 성격의 읽기 전용 함수다 —
+    // 확인 팝업이 "이걸 인용하면 뭐가 오르는가"를 보여줄 때 쓴다.
+    function previewQuote(tweetId) {
+      var t = findNpcTweet(tweetId);
+      if (!t) return null;
+      var qrules = data.quote || {};
+      var eff = (qrules.byAttr && qrules.byAttr[t.attr]) || qrules.fallback;
+      var out = {};
+      // 실제 적용과 같은 수식·clamp를 지나야 미리보기가 안 어긋난다
+      Object.keys(eff || {}).forEach(function (k) {
+        out[k] = evalEffect(k, eff[k], state);
+      });
+      return { attr: t.attr, author: t.author, text: t.text, effects: out };
+    }
+
+    // 내 트윗을 지운다. **하루를 안 쓴다** — 반응·팔로우·디엠과 같은 부류다.
+    //
+    // tweetLog에서 통째로 지우므로 그 트윗 조회수가 정산에서 자동으로 빠진다
+    // (정산은 tweetLog를 훑어 계산한다). 그래서 정산 로직은 건드릴 게 없다.
+    // 묘비(deleted 표시)를 남기지 않는다 — 완전 삭제다.
+    function deleteTweet(tweetId) {
+      if (!tweetId) return null;
+      var idx = -1;
+      state.tweetLog.forEach(function (t, i) { if (t.id === tweetId) idx = i; });
+      if (idx === -1) return null;
+      var gone = state.tweetLog[idx];
+      state.tweetLog.splice(idx, 1);
+      // 피드에서도 뺀다. 그 트윗에 달린 답글도 같이 지운다 — 원본이 없는 답글이
+      // 남으면 상세를 열 수 없는 유령 스레드가 된다.
+      state.feed = state.feed.filter(function (f) {
+        return f.id !== tweetId && f.replyTo !== tweetId;
+      });
+
+      var rules = data.deleteTweet || {};
+      var changes = {};
+      if (rules["논란성"]) applyEffects({ "논란성": rules["논란성"] }, changes);
+
+      // 박제. 지웠는데 캡처가 돌아서 논란성이 오히려 더 오른다.
+      // 이게 없으면 삭제가 순수한 이득이라 그냥 눌러야 하는 버튼이 된다.
+      var busted = rand() < (rules.bustedChance || 0);
+      if (busted && rules.bustedMood) {
+        applyEffects({ "논란성": rules.bustedMood }, changes);
+      }
+      return { id: tweetId, views: gone.views || 0, busted: busted, statChanges: changes };
+    }
+
     // 남의 트윗 좋아요/리트윗. 하루를 소모하지 않고 advanceTurn을 거치지 않는다.
     //
     // 트윗 하나는 카운터를 정확히 한 번만 올린다(gained). 좋아요든 리트윗이든 먼저 누른
@@ -854,6 +934,7 @@
       markDmRead: markDmRead, unreadDms: unreadDms,
       storyChoices: storyChoices, sendStory: sendStory, isStoryAccount: isStoryAccount,
       buyItem: buyItem, canBuy: canBuy,
+      canQuote: canQuote, previewQuote: previewQuote, deleteTweet: deleteTweet,
       _goStory: goStory,
       _reactionsOn: reactionsOn };
   }
