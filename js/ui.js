@@ -61,9 +61,17 @@
 
   // 프로필 사진. 경로는 핸들에서 바로 나오므로 데이터에 파일명을 또 적지 않는다.
   // (@meme_bot99 → assets/avatars/meme_bot99.svg, 나 → me.svg)
+  //
+  // 확장자는 두 종류다. 대부분은 open-peeps 일러스트(.svg)이고, PHOTO_PFP에 적힌 계정만
+  // 실사 사진(.jpg)이다. `<img src>`는 파일이 없어도 조용히 깨질 뿐 알려주지 않아서
+  // 런타임 탐색이 불가능하다 — 그래서 목록을 명시한다.
+  // 사진 계정을 추가하면 여기에 핸들을 넣고 같은 이름의 .jpg를 넣을 것
+  // (test/check-assets.js가 목록과 실제 파일이 어긋나면 잡는다).
+  var PHOTO_PFP = ["stage_run", "seat_log", "notice_kr", "home_tips"];
+
   function pfpSrc(handle) {
-    return "assets/avatars/" +
-      (handle === "me" || handle === "@me" ? "me" : String(handle).replace("@", "")) + ".svg";
+    var base = (handle === "me" || handle === "@me") ? "me" : String(handle).replace("@", "");
+    return "assets/avatars/" + base + (PHOTO_PFP.indexOf(base) === -1 ? ".svg" : ".jpg");
   }
 
   function pfp(handle) {

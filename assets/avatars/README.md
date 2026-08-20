@@ -46,3 +46,24 @@ svg를 빠뜨리면 그 계정만 아바타가 깨진다(회귀 테스트가 잡
 | lurker_9 | `#e6e6e6` | old_records | `#d8d0c0` |
 | anime_burn | `#ffd9e8` | otaku_wallet | `#cfe3d4` |
 | sakuga_note | `#e0dcf5` | | |
+
+## 실사 사진 계정
+
+일부 계정은 일러스트가 아니라 **실사 사진**(.jpg)을 쓴다. 확장자가 둘이므로
+`js/ui.js`의 `PHOTO_PFP` 목록에 핸들을 적어야 `pfpSrc()`가 .jpg를 찾는다.
+`<img src>`는 파일이 없어도 조용히 깨질 뿐이라 런타임 탐색이 불가능해서 목록으로 관리한다.
+(목록과 실제 파일이 어긋나면 `test/check-assets.js`가 잡는다)
+
+출처는 [Pexels](https://www.pexels.com), 라이선스는 [Pexels License](https://www.pexels.com/license/)
+— 출처 표기 의무는 없으나 남겨둔다. 상업적 이용과 수정이 허용된다.
+런타임에 Pexels를 부르지 않고 **받아서 저장소에 넣어 쓴다**(일러스트와 같은 이유).
+
+인물이 식별되는 사진은 쓰지 않는다 — 가상 계정이 실존 인물의 얼굴로 말하게 되기 때문이다.
+사물·풍경을 우선하고, 사람이 나오더라도 얼굴이 특정되지 않는 원거리 사진만 쓴다.
+
+| 핸들 | 사진 | 작가 |
+|---|---|---|
+| stage_run | [2247678](https://www.pexels.com/photo/2247678/) | Eric Smart |
+| seat_log | [18440206](https://www.pexels.com/photo/18440206/) | Tori Pezzulla |
+| notice_kr | [5518867](https://www.pexels.com/photo/5518867/) | Michelle Tiemann |
+| home_tips | [16805249](https://www.pexels.com/photo/16805249/) | Dmitriy Steinke |

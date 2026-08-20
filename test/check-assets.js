@@ -14,7 +14,17 @@ Object.assign(data, require(path.join(root, "data", "ads.js")));   // 광고 계
 var npcs = data.npcs;
 var gen = data.timeline.gen;
 
-function has(name) { return fs.existsSync(path.join(dir, name + ".svg")); }
+// 아바타는 확장자가 둘이다 — 대부분 open-peeps 일러스트(.svg), 일부 계정만 실사 사진(.jpg).
+// 어느 쪽이든 있으면 통과이고, 어느 쪽인지는 ui.js의 PHOTO_PFP와 대조한다(아래).
+var EXTS = [".svg", ".jpg"];
+function extOf(name) {
+  for (var i = 0; i < EXTS.length; i++) {
+    if (fs.existsSync(path.join(dir, name + EXTS[i]))) return EXTS[i];
+  }
+  return null;
+}
+function has(name) { return extOf(name) !== null; }
+function isAvatarFile(f) { return EXTS.some(function (e) { return f.endsWith(e); }); }
 
 // ── ui.js가 표기용으로 복제한 GAIN_MAX/ATTR_STAT가 data/npcs.js의 reaction과 맞는지 ──
 // js/ui.js는 DOM 없이 require는 되지만 GAIN_MAX·ATTR_STAT는 export되지 않는 클로저 변수라
@@ -58,12 +68,27 @@ if (adHandle) {
 }
 
 // 계정을 지웠을 때 쓰이지 않는 사진이 쌓이는 것도 잡아준다
-var used = npcs.map(function (n) { return n.handle.replace("@", "") + ".svg"; }).concat("me.svg");
-if (adHandle) used.push(adHandle + ".svg");
+var usedBases = npcs.map(function (n) { return n.handle.replace("@", ""); }).concat("me");
+if (adHandle) usedBases.push(adHandle);
+var used = usedBases.map(function (b) { return b + (extOf(b) || ".svg"); });
 var orphans = fs.readdirSync(dir).filter(function (f) {
-  return f.endsWith(".svg") && used.indexOf(f) === -1;
+  return isAvatarFile(f) && used.indexOf(f) === -1;
 });
 assert.strictEqual(orphans.length, 0, "쓰이지 않는 아바타: " + orphans.join(", "));
+
+// ── ui.js의 PHOTO_PFP가 실제 .jpg 파일과 일치하는가 ──
+// pfpSrc()는 이 목록으로 확장자를 고른다. 목록에만 있고 파일이 없으면 그 계정 아바타가
+// 깨지고, 파일만 있고 목록에 없으면 .svg를 찾다가 역시 깨진다. 둘 다 브라우저를 열기
+// 전엔 모르는 종류의 사고라(`<img>`는 조용히 실패한다) 여기서 묶어둔다.
+var photoListMatch = /PHOTO_PFP\s*=\s*\[([^\]]*)\]/.exec(uiSrc);
+assert.ok(photoListMatch, "js/ui.js에서 PHOTO_PFP를 못 찾았다 — 이름이 바뀌었으면 이 테스트도 같이 고칠 것");
+var photoList = (photoListMatch[1].match(/"([^"]+)"/g) || []).map(function (q) { return q.slice(1, -1); }).sort();
+var jpgFiles = fs.readdirSync(dir).filter(function (f) { return f.endsWith(".jpg"); })
+  .map(function (f) { return f.slice(0, -4); }).sort();
+assert.deepStrictEqual(photoList, jpgFiles,
+  "ui.js의 PHOTO_PFP와 실제 .jpg 파일이 다르다." +
+  "\n  PHOTO_PFP: " + photoList.join(", ") +
+  "\n  실제 파일: " + jpgFiles.join(", "));
 
 // ── 프로필 내용 ──
 var noBio = npcs.filter(function (n) { return !n.bio; });
@@ -145,6 +170,6 @@ console.log("  길이 분포 " + buckets.join(" / ") + " (10~42 / 43~75 / 76~107
 var total = npcs.reduce(function (a, n) { return a + n.tweets.length; }, 0);
 // 아바타는 실제 파일 수를 센다 — npcs.length + 1로 계산하면 광고 계정처럼
 // NPC 목록 밖에서 쓰는 아바타를 놓친다(위에서 이미 누락·고아 검사는 끝났다)
-var avatarCount = fs.readdirSync(dir).filter(function (f) { return f.endsWith(".svg"); }).length;
+var avatarCount = fs.readdirSync(dir).filter(isAvatarFile).length;
 console.log("assets OK — 계정 " + npcs.length + "개, 아바타 " + avatarCount +
   "개, 트윗 " + total + "개 (계정당 " + Math.round(total / npcs.length) + "개)");

@@ -42,7 +42,7 @@
 **넷 다 bait가 아니다.** 논란성은 쌓기 쉬우면 topStat 엔딩 3종이 막힌다(CLAUDE.md에 실측
 기록이 있다 — 1일차 352회 반응에 논란성 +13). bait 계정은 3개로 유지한다.
 
-추가 후 첫 카테고리 분포: humor 2 / info 8 / bait 3 / daily 11.
+추가 후 첫 카테고리 분포: humor 3 / info 8 / bait 3 / daily 10 (실측).
 
 ## 트윗
 
