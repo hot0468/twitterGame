@@ -77,6 +77,24 @@ GAME_DATA.events = [
           { label: "문장을 하나씩 뜯어본다", story: "@rookie_writer:w4a", next: "end" },
           { label: "끝까지 그냥 읽는다", story: "@rookie_writer:w4b", next: "end" }
         ] }
+    ] },
+
+  // 산책하다 길고양이를 만난다. 괴담계(old_school)도 산책에 걸려 있지만 저건
+  // "@old_records가 s2일 때"라는 아주 좁은 조건이라 부딪히지 않는다 —
+  // 나머지 대부분의 산책에서는 아무 이벤트도 안 떴고, 그 빈자리를 쓴다.
+  //
+  // 트윗을 고르면 flag를 남기고, 그게 @cat_daily 스토리의 시작 조건이 된다.
+  // **만난 것이 아니라 그 얘기를 트윗한 것이 조건이다** — 그냥 지나치면 안 열린다.
+  { id: "stray_cat",
+    trigger: { action: "walk", chance: 0.3 },
+    stages: [
+      { feed: ["골목 끝에 고양이가 앉아 있다.\n도망가지도 다가오지도 않고 그냥 이쪽을 본다"],
+        choices: [
+          { label: "이 얘기를 트윗한다", flag: "cat_tweeted",
+            effects: { "팔로워": "3 + 감각" }, next: "end" },
+          { label: "사진만 찍어둔다", effects: { "멘탈": 2 }, next: "end" },
+          { label: "그냥 지나간다", effects: {}, next: "end" }
+        ] }
     ] }
 ];
 if (typeof module !== "undefined") module.exports = GAME_DATA;

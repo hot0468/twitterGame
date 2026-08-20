@@ -94,7 +94,11 @@
       // 카운터는 안 오른다(gained도 안 찍는다) — 검색 화면이 보관함 전체를 모아주므로
       // 하루 상한이 없으면 무제한 그라인딩으로 밸런스가 무너진다.
       reactDay: { day: 1, used: 0 },
-      feed: [], tweetLog: [], activeEvents: [], eventHistory: [], ending: null
+      feed: [], tweetLog: [], activeEvents: [], eventHistory: [], ending: null,
+      // 이벤트 선택지가 남기는 표식. 스토리 시작 조건(requires.flags)이 읽는다.
+      // "겪었나"(eventHistory)가 아니라 "무엇을 골랐나"를 기억해야 할 때 쓴다 —
+      // 길고양이를 만나고 그냥 지나친 것과 트윗한 것은 다르다.
+      flags: {}
     };
   }
 
@@ -394,6 +398,8 @@
         var ae = state.activeEvents.filter(function (a) { return a.eventId === parts[1]; })[0];
         var choice = ev.stages[ae.stage].choices[Number(parts[2])];
         applyEffects(choice.effects, statChanges);
+        // 선택지가 표식을 남긴다. 스토리 시작 조건이 이걸 본다.
+        if (choice.flag) state.flags[choice.flag] = state.day;
         // 스토리 이벤트: 고른 것이 DM 스토리를 진행시킨다.
         // 다음 노드에 delay가 있으면 예약만 하고 답장은 나중에 온다.
         //
@@ -638,7 +644,10 @@
       var room = dmRoom(handle);
       if (!room) return [];
       var out = [];
-      data.dm.accounts[handle].topics.forEach(function (t, i) {
+      // 잡담 데이터가 없는 계정(스토리 전용)은 빈 배열이다 — 예전엔 여기서 터졌다.
+      var acc = data.dm.accounts && data.dm.accounts[handle];
+      if (!acc || !acc.topics) return out;
+      acc.topics.forEach(function (t, i) {
         if (room.used.indexOf(i) === -1) out.push({ idx: i, label: t.say });
       });
       return out.slice(0, data.dm.choices || 3);
@@ -708,7 +717,22 @@
     // 이 계정이 스토리 계정인가. UI가 "선택지가 비었는가"로 판단하면 안 된다 —
     // 대기·지연 중에도 빈 배열이라, 그걸로 가르면 기존 getDmChoices로 넘어가
     // accounts에 없는 계정에서 터진다(실제로 겪음).
-    function isStoryAccount(handle) { return !!storyDef(handle); }
+    // **정의가 있는가가 아니라 지금 돌고 있는가**를 본다. 한 계정이 잡담(accounts)과
+    // 스토리(stories)를 둘 다 가질 수 있기 때문이다 — @mutuals_only가 그렇다.
+    // 정의만으로 가르면 스토리가 시작되기 훨씬 전부터(팔로워 3000 조건이다)
+    // 그 계정 잡담이 통째로 막힌다: UI가 storyChoices()를 쓰는데 빈 배열이라
+    // 선택지 바가 비어버린다(실측).
+    //
+    // 끝난 뒤(done)에도 true다 — 끝 노드의 마지막 대사가 방에 남아 있어야 하고,
+    // 이야기를 끝낸 계정과 다시 잡담을 시작하면 그 이야기가 없던 일처럼 읽힌다.
+    function isStoryAccount(handle) {
+      if (!storyDef(handle)) return false;
+      // 이야기가 돌고 있으면(끝난 뒤에도) 스토리 계정이다.
+      if (state.dmStory[handle]) return true;
+      // 아직 시작 전이면, 잡담 데이터가 없는 계정만 스토리 계정으로 본다 —
+      // @old_records처럼 stories에만 있는 계정은 getDmChoices가 topics에서 터진다.
+      return !(data.dm.accounts && data.dm.accounts[handle]);
+    }
 
     // 스토리 선택. 하루를 안 쓰고 스탯도 안 건드린다(기존 DM과 같은 규칙).
     // 다음 노드에 delay가 있으면 그 날짜로 예약만 하고 답장은 나중에 온다.
@@ -728,16 +752,28 @@
       return { handle: handle, msgs: room.msgs };
     }
 
-    // 시작 조건. reactions는 그 계정 트윗에 반응한 수, 나머지는 스탯 비교식이다.
+    // 시작 조건. reactions는 그 계정 트윗에 반응한 수, flags는 이벤트에서 고른 선택지,
+    // chance는 확률, 나머지는 스탯 비교식이다.
+    //
+    // reactions·flags·chance는 checkCond에 넘기기 전에 **반드시 걸러내야 한다** —
+    // 안 그러면 스탯 이름으로 오해한다(action·dmStory와 같은 함정).
     function storyReady(handle) {
       var def = storyDef(handle);
       if (!def || state.dmStory[handle]) return false;      // 이미 시작했으면 안 한다
       if (state.npcSeen[handle] == null) return false;      // 만나야 온다
       var req = def.requires || {};
       if (req.reactions != null && reactionsOn(handle) < req.reactions) return false;
+      // 표식이 전부 찍혀 있어야 한다. "만났다"가 아니라 "그 선택을 했다"가 조건이다.
+      if (req.flags && req.flags.some(function (f) { return !state.flags[f]; })) return false;
       var rest = {};
-      Object.keys(req).forEach(function (k) { if (k !== "reactions") rest[k] = req[k]; });
-      return checkCond(rest, state);
+      Object.keys(req).forEach(function (k) {
+        if (k !== "reactions" && k !== "flags" && k !== "chance") rest[k] = req[k];
+      });
+      if (!checkCond(rest, state)) return false;
+      // 확률은 마지막에 잰다 — 다른 조건이 다 맞은 턴에만 주사위를 굴려야
+      // 조건이 안 맞는 턴에 확률만 소모되지 않는다.
+      // **없으면 확정이다**(기존 두 스토리가 그대로 동작해야 한다).
+      return req.chance == null || rand() < req.chance;
     }
 
     // 턴마다: 조건이 맞으면 시작하고, 예약된 지연 답장이 오늘이면 도착시킨다.

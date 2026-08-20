@@ -1248,8 +1248,12 @@ gW.sendStory("@old_records", 0);            // s2 (대기)
 assert.strictEqual(gW.getState().dmStory["@old_records"].node, "s2");
 var r1 = gW.advanceTurn("walk", false);
 assert.ok(r1.triggeredEvents.indexOf("old_school") !== -1, "산책하면 폐교 이벤트가 뜬다");
-var evActs = gW.getActions().filter(function (a) { return a.kind === "event"; });
-assert.strictEqual(evActs.length, 2, "선택지 2개(사진/눈으로만)");
+// 폐교 이벤트의 선택지만 센다. 산책에는 길고양이(stray_cat, chance 0.3)도 걸려 있어서
+// 전체 이벤트 선택지를 세면 그게 같이 떴는지에 따라 결과가 흔들린다(플레이키 테스트).
+var evActs = gW.getActions().filter(function (a) {
+  return a.kind === "event" && a.id.indexOf("event:old_school:") === 0;
+});
+assert.strictEqual(evActs.length, 2, "폐교 선택지 2개(사진/눈으로만)");
 
 // 다른 행동에선 안 뜬다
 var gW2 = storyGame();
@@ -1270,9 +1274,11 @@ var r4 = gW4.advanceTurn("walk", false);
 assert.strictEqual(r4.triggeredEvents.indexOf("old_school"), -1, "스토리 없으면 안 뜬다");
 
 // 선택지가 스토리를 진행시킨다 — 사진(s4a, delay 2)
+// 폐교 이벤트의 선택지에서만 찾는다. 길고양이(stray_cat)에도 "사진만 찍어둔다"가
+// 있어서 전체에서 label로 찾으면 그쪽을 집을 수 있다(플레이키 테스트).
 var photoIdx = -1;
 gW.getActions().forEach(function (a, i) {
-  if (a.kind === "event" && a.label.indexOf("사진") !== -1) photoIdx = i;
+  if (a.id.indexOf("event:old_school:") === 0 && a.label.indexOf("사진") !== -1) photoIdx = i;
 });
 assert.ok(photoIdx >= 0, "사진 선택지를 찾았다");
 var photoId = gW.getActions()[photoIdx].id;
@@ -1311,7 +1317,7 @@ gDly.sendStory("@old_records", 0);          // s2 (대기)
 gDly.advanceTurn("walk", false);            // 폐교 이벤트
 var photoAct = null;
 gDly.getActions().forEach(function (a) {
-  if (a.kind === "event" && a.label.indexOf("사진") !== -1) photoAct = a.id;
+  if (a.id.indexOf("event:old_school:") === 0 && a.label.indexOf("사진") !== -1) photoAct = a.id;
 });
 gDly.advanceTurn(photoAct, false);          // 사진 → s4a는 delay 2
 assert.strictEqual(gDly.getState().dmStory["@old_records"].node, "s2",
@@ -1359,9 +1365,19 @@ assert.ok(typeof fmtDm[0].label === "string", "기존 선택지도 { idx, label 
 
 // 스토리 계정 판별은 엔진이 한다 — UI가 "선택지가 비었는가"로 가르면
 // 대기 중에 기존 getDmChoices로 넘어가 accounts에 없는 계정에서 터진다.
-assert.strictEqual(gFmt.isStoryAccount("@old_records"), true);
-assert.strictEqual(gFmt.isStoryAccount("@mutuals_only"), false);
+// 정의가 있는가가 아니라 **지금 돌고 있는가**로 가른다 — 한 계정이 잡담과 스토리를
+// 둘 다 가질 수 있기 때문이다(@mutuals_only @cat_daily @rookie_writer가 그렇다).
+// 정의만으로 가르면 스토리가 시작되기 훨씬 전부터 그 계정 잡담이 통째로 막힌다.
+assert.strictEqual(gFmt.isStoryAccount("@old_records"), true,
+  "stories에만 있는 계정은 시작 전에도 스토리 계정이다 — getDmChoices가 topics에서 터진다");
+assert.strictEqual(gFmt.isStoryAccount("@mutuals_only"), false,
+  "잡담 데이터가 있으면 스토리 시작 전엔 잡담 계정이다");
+assert.ok(gFmt.getDmChoices("@mutuals_only").length > 0,
+  "스토리가 있어도 시작 전엔 잡담을 걸 수 있다");
 assert.strictEqual(gFmt.isStoryAccount("@없는계정"), false);
+// 스토리 전용 계정의 getDmChoices는 터지지 않고 빈 배열이다
+assert.deepStrictEqual(gFmt.getDmChoices("@old_records"), [],
+  "스토리 전용 계정은 빈 배열 — 예전엔 여기서 터졌다");
 
 console.log("선택지 형식 OK");
 
@@ -1731,3 +1747,114 @@ assert.strictEqual(gDel.deleteTweet(null), null);
 assert.strictEqual(gDel.deleteTweet(qTarget.id), null, "남의 트윗은 못 지운다");
 
 console.log("트윗 삭제 OK");
+
+// ── 플래그와 확률 스토리 ────────────────────────────────────────
+// 기존 스토리는 스탯만 보고 확정으로 시작한다. 길고양이는 두 단계 사슬이다 —
+// 산책하다 이벤트를 만나 **그 얘기를 트윗해야** 열리고, 그마저 확률이다.
+
+// rng를 낮게 고정하면 확률이 전부 통과한다(이벤트 chance 0.3, 스토리 chance 0.35)
+function lowRng() { return 0.05; }
+
+// 계정을 만나려면 트윗을 해야 한다 — rest만 돌리면 반응이 안 와서 아무도 못 만난다
+function grown(turns, rng) {
+  var g = Engine.create(loadData(), null, rng);
+  for (var i = 0; i < turns; i++) g.advanceTurn("write", true);
+  return g;
+}
+
+// 산책하면 길고양이 이벤트가 뜬다
+var gCat = grown(25, lowRng);
+gCat.advanceTurn("walk", false);
+var catEv = gCat.getActions().filter(function (a) { return a.kind === "event"; });
+assert.ok(catEv.length > 0, "산책하면 길고양이 이벤트가 뜬다");
+assert.strictEqual(catEv.length, 3, "선택지가 셋이다");
+
+// 트윗을 고르면 flag가 찍히고, 그게 스토리를 연다
+gCat.advanceTurn("event:stray_cat:0", false);
+assert.ok(gCat.getState().flags["cat_tweeted"], "트윗을 고르면 flag가 찍힌다");
+for (var ci = 0; ci < 6; ci++) gCat.advanceTurn("rest", false);
+assert.ok(gCat.getState().dmStory["@cat_daily"], "flag가 있으면 스토리가 열린다");
+
+// 만나기만 하고 지나치면 안 열린다 — "겪었나"가 아니라 "무엇을 골랐나"가 조건이다.
+// eventHistory로 조건을 걸면 여기서 실패한다.
+[1, 2].forEach(function (idx) {
+  var gSkip = grown(25, lowRng);
+  gSkip.advanceTurn("walk", false);
+  gSkip.advanceTurn("event:stray_cat:" + idx, false);
+  for (var si = 0; si < 10; si++) gSkip.advanceTurn("rest", false);
+  assert.ok(!gSkip.getState().flags["cat_tweeted"],
+    "선택지 " + idx + "는 flag를 안 찍는다");
+  assert.ok(!gSkip.getState().dmStory["@cat_daily"],
+    "선택지 " + idx + "를 고르면 스토리가 안 열린다");
+});
+
+// 플래그가 아예 없으면 절대 안 열린다
+var gNoFlag = grown(40, lowRng);
+assert.ok(!gNoFlag.getState().dmStory["@cat_daily"],
+  "플래그 없이는 40턴을 돌려도 안 열린다");
+
+// chance가 없는 스토리는 확정으로 시작한다(기존 둘이 그대로 동작해야 한다).
+// rng를 1에 가깝게 줘도 chance 없는 스토리는 영향을 안 받는다.
+var dmData = loadData();
+assert.strictEqual(dmData.dm.stories["@old_records"].requires.chance, undefined,
+  "괴담계엔 chance가 없다 — 확정으로 시작한다");
+assert.strictEqual(dmData.dm.stories["@rookie_writer"].requires.chance, undefined,
+  "쓰다가지움엔 chance가 없다");
+
+// 구버전 세이브에 flags가 없어도 터지지 않는다
+var savedNoFlags = JSON.parse(JSON.stringify(gCat.getState()));
+delete savedNoFlags.flags;
+var gOldFlags = Engine.create(loadData(), savedNoFlags);
+assert.ok(gOldFlags.getState().flags, "flags가 채워진다");
+gOldFlags.advanceTurn("rest", false);   // 터지지 않아야 한다
+
+console.log("플래그 스토리 OK");
+
+// ── 새 스토리 둘이 끝까지 간다 ──────────────────────────────────
+// 중간에 막히는 노드(선택지가 비었는데 end도 아니고 이벤트도 없는 곳)가 있으면
+// 플레이어가 영원히 갇힌다. 실제로 끝까지 굴려서 확인한다.
+function playStory(game, handle) {
+  for (var guard = 0; guard < 400; guard++) {
+    var story = game.getState().dmStory[handle];
+    if (story && story.done) return story.node;
+    var ch = story ? game.storyChoices(handle) : null;
+    if (ch && ch.length) game.sendStory(handle, ch[0].idx);
+    else game.advanceTurn("rest", false);
+  }
+  return null;
+}
+
+var catEnd = playStory(gCat, "@cat_daily");
+assert.ok(catEnd, "길고양이 이야기가 끝까지 간다");
+assert.ok(gCat.getState().dmStory["@cat_daily"].done, "done이 찍힌다");
+
+// 첫 팬: 팔로워 3000 + 반응 3회
+var gFan = grown(30, lowRng);
+gFan.getState().followers = 5000;
+var fanReacted = 0;
+(gFan.getState().npcTweets["@mutuals_only"] || []).forEach(function (t) {
+  if (fanReacted < 3) { gFan.toggleReaction(t.id, "like"); fanReacted++; }
+});
+assert.strictEqual(fanReacted, 3, "맞팔해요 트윗에 3번 반응했다");
+gFan.getState().followers = 5000;   // 반응이 팔로워를 안 건드리지만 확실히
+for (var fi = 0; fi < 5; fi++) gFan.advanceTurn("rest", false);
+assert.ok(gFan.getState().dmStory["@mutuals_only"], "첫 팬 이야기가 열린다");
+
+var moraleBefore = gFan.getState().stats.멘탈;
+var fanEnd = playStory(gFan, "@mutuals_only");
+assert.ok(fanEnd, "첫 팬 이야기가 끝까지 간다");
+assert.ok(gFan.getState().stats.멘탈 > moraleBefore,
+  "끝내면 멘탈이 오른다 — 나쁘게 끝나지 않는 이야기다");
+
+// 보상은 한 번만. 끝 노드는 done이 찍혀 다시 안 지나간다.
+// 멘탈 총량으로 재면 안 된다 — rest가 매 턴 +15를 주므로 그냥 계속 오른다.
+// 노드가 그대로이고 done이 유지되는지를 본다.
+var fanNodeAfter = gFan.getState().dmStory["@mutuals_only"].node;
+for (var fj = 0; fj < 10; fj++) gFan.advanceTurn("rest", false);
+var fanStoryLater = gFan.getState().dmStory["@mutuals_only"];
+assert.strictEqual(fanStoryLater.node, fanNodeAfter,
+  "끝난 뒤엔 노드가 움직이지 않는다");
+assert.ok(fanStoryLater.done, "done이 유지된다 — 보상 노드를 다시 지나가지 않는다");
+assert.ok(!fanStoryLater.pending, "예약이 새로 잡히지 않는다");
+
+console.log("새 스토리 둘 OK");
